@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>حضور المناديب</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mut:#667085;--bd:#e3e6eb;--pri:#0b6b8a;--on:#fff;--ok:#1a7f4b;--bad:#c0392b;--warn:#b7791f}
+@media (prefers-color-scheme:dark){:root{--bg:#14171a;--card:#1d2226;--tx:#eceff2;--mut:#98a2b3;--bd:#2d343a;--pri:#4cb3d4;--on:#0b1418;--ok:#4cc38a;--bad:#ff8a7a;--warn:#e7b04a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;line-height:1.6;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 2px}h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--mut);font-size:14px;margin-bottom:14px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;padding:9px 14px;cursor:pointer;flex:1;min-width:90px}
+button.sel,button.pri{background:var(--pri);color:var(--on);border-color:var(--pri)}
+button.sm{flex:none;min-width:0;padding:4px 10px;font-size:13px}
+button.link{border:0;background:none;color:var(--pri);flex:none;min-width:0;padding:4px}
+button:disabled{opacity:.5}
+input{font:inherit;width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);margin-bottom:8px}
+.msg{color:var(--mut);font-size:13px;margin-top:6px;min-height:18px}
+.err{color:var(--bad)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{padding:8px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+th{color:var(--mut);font-weight:600}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px;text-align:center}
+.stat b{display:block;font-size:22px}.stat span{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<main id="app"><p class="sub">جاري التحميل…</p></main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,sendEmailVerification,sendPasswordResetEmail,updateProfile} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,doc,getDoc,setDoc,updateDoc,collection,query,where,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const fb=initializeApp({
+  apiKey:"AIzaSyCvLvPjnXCnwenVZazbrBlLza3ZqpQRWCs",
+  authDomain:"follow-up-fd860.firebaseapp.com",
+  projectId:"follow-up-fd860",
+  storageBucket:"follow-up-fd860.firebasestorage.app",
+  messagingSenderId:"561000150460",
+  appId:"1:561000150460:web:a793168c90f312d94ce7b9"
+});
+const auth=getAuth(fb),db=getFirestore(fb);
+const ADMIN="azamabdellatif87@gmail.com";
+const app=document.getElementById('app');
+const ST={present:'حاضر',absent:'غايب',off:'إجازة'};
+const ERR={'auth/invalid-credential':'الإيميل أو الباسورد غلط','auth/invalid-login-credentials':'الإيميل أو الباسورد غلط','auth/email-already-in-use':'الإيميل ده مسجل قبل كده، سجل دخول','auth/weak-password':'الباسورد لازم يكون 6 حروف أو أرقام على الأقل','auth/invalid-email':'الإيميل مكتوب غلط','auth/missing-password':'اكتب الباسورد','auth/too-many-requests':'محاولات كتير، استنى شوية وجرب تاني'};
+let unsubs=[],registering=false;
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function iso(d){const m=d.getMonth()+1,k=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(k<10?'0':'')+k}
+const today=iso(new Date());
+function clear(){unsubs.forEach(f=>f());unsubs=[];app.textContent=''}
+function header(title,sub){const t=el('div','top'),l=el('div');l.appendChild(el('h1','',title));l.appendChild(el('div','sub',sub));t.appendChild(l);
+  const b=el('button','sm','خروج');b.onclick=()=>signOut(auth);t.appendChild(b);app.appendChild(t)}
+
+/* ---------- تسجيل الدخول ---------- */
+function authView(mode){
+  clear();mode=mode||'login';
+  app.appendChild(el('h1','','حضور المناديب'));
+  app.appendChild(el('div','sub',mode==='login'?'سجل دخول بإيميلك':'اعمل حساب جديد بإيميلك'));
+  const c=el('div','card'),name=el('input'),em=el('input'),pw=el('input'),msg=el('div','msg err');
+  name.placeholder='الاسم بالكامل';em.type='email';em.placeholder='الإيميل (Gmail أو Outlook أو أي إيميل)';em.dir='ltr';pw.type='password';pw.placeholder='الباسورد (6 على الأقل)';pw.dir='ltr';
+  if(mode==='register')c.appendChild(name);c.appendChild(em);c.appendChild(pw);
+  const go=el('button','pri',mode==='login'?'دخول':'إنشاء حساب');
+  go.onclick=async()=>{
+    msg.textContent='';go.disabled=true;
+    try{
+      if(mode==='login'){await signInWithEmailAndPassword(auth,em.value.trim(),pw.value)}
+      else{
+        if(!name.value.trim()){msg.textContent='اكتب اسمك';go.disabled=false;return}
+        registering=true;
+        const r=await createUserWithEmailAndPassword(auth,em.value.trim(),pw.value);
+        await updateProfile(r.user,{displayName:name.value.trim()});
+        await setDoc(doc(db,'users',r.user.uid),{name:name.value.trim(),email:r.user.email});
+        try{await sendEmailVerification(r.user)}catch(e){}
+        registering=false;route(auth.currentUser);
+      }
+    }catch(e){registering=false;msg.textContent=ERR[e.code]||('حصل خطأ: '+(e.code||e.message))}
+    go.disabled=false;
+  };
+  c.appendChild(go);c.appendChild(msg);
+  const sw=el('button','link',mode==='login'?'معنديش حساب؟ سجل دلوقتي':'عندي حساب؟ سجل دخول');sw.onclick=()=>authView(mode==='login'?'register':'login');c.appendChild(sw);
+  if(mode==='login'){const f=el('button','link','نسيت الباسورد');f.onclick=async()=>{if(!em.value.trim()){msg.textContent='اكتب الإيميل الأول';return}try{await sendPasswordResetEmail(auth,em.value.trim());msg.className='msg';msg.textContent='بعتنالك رابط تغيير الباسورد على الإيميل'}catch(e){msg.textContent=ERR[e.code]||'حصل خطأ'}};c.appendChild(f)}
+  app.appendChild(c);
+}
+
+/* ---------- شاشة المندوب ---------- */
+async function repView(u){
+  clear();
+  const ref=doc(db,'records',u.uid+'_'+today);let rec={},wantAdv=false;
+  try{const s=await getDoc(ref);if(s.exists())rec=s.data()}catch(e){}
+  const msg=el('div','msg');
+  async function save(p){
+    Object.assign(rec,p);msg.textContent='جاري الحفظ…';
+    try{await setDoc(ref,{...p,uid:u.uid,name:u.displayName||u.email,email:u.email,date:today},{merge:true});msg.textContent='اتحفظ ✓'}
+    catch(e){msg.textContent='ما اتحفظش، جرب تاني'}
+    draw();
+  }
+  function group(title,opts,key,cur){
+    const c=el('div','card');c.appendChild(el('h2','',title));const r=el('div','row');
+    opts.forEach(o=>{const b=el('button',cur===o[0]?'sel':'',o[1]);b.onclick=()=>save({[key]:o[0]});r.appendChild(b)});
+    c.appendChild(r);return c}
+  function draw(){
+    app.textContent='';
+    header('أهلاً '+(u.displayName||''),'تسجيل يوم '+today);
+    app.appendChild(group('حالتك النهاردة',[['present','حاضر'],['absent','غايب'],['off','إجازة']],'status',rec.status));
+    app.appendChild(group('هتيجي بكرا؟',[['yes','أيوه جاي'],['no','لأ مش جاي']],'tomorrow',rec.tomorrow));
+    const a=el('div','card');a.appendChild(el('h2','','سلفة'));const yn=el('div','row');
+    const has=rec.advance>0||wantAdv;
+    [[false,'مش محتاج سلفة'],[true,'محتاج سلفة']].forEach(o=>{const b=el('button',has===o[0]?'sel':'',o[1]);
+      b.onclick=()=>{if(o[0]){wantAdv=true;draw()}else{wantAdv=false;save({advance:0})}};yn.appendChild(b)});
+    a.appendChild(yn);
+    if(has){const i=el('input');i.type='number';i.min='1';i.placeholder='المبلغ المطلوب';i.style.marginTop='8px';i.value=rec.advance>0?rec.advance:'';
+      const sb=el('button','pri','احفظ المبلغ');sb.style.width='100%';
+      sb.onclick=()=>{const v=parseFloat(i.value);if(!(v>0)){msg.textContent='اكتب مبلغ صحيح';return}wantAdv=false;save({advance:v,advanceStatus:'pending'})};
+      a.appendChild(i);a.appendChild(sb);
+      if(rec.advance>0){const s=rec.advanceStatus;a.appendChild(el('div','msg '+(s==='approved'?'ok':s==='rejected'?'bad':'warn'),'حالة الطلب: '+(s==='approved'?'تمت الموافقة':s==='rejected'?'مرفوض':'في انتظار المراجعة')))}}
+    app.appendChild(a);
+    app.appendChild(group('إنهاء العمل',[[false,'لسه شغال'],[true,'خلصت شغل النهاردة']],'ended',!!rec.ended));
+    app.appendChild(msg);
+  }
+  draw();
+}
+
+/* ---------- لوحة المشرف ---------- */
+function adminView(u){
+  clear();
+  let date=today,users={},recs={},unRec=null;
+  const box=el('div');
+  function sub(){if(unRec)unRec();
+    unRec=onSnapshot(query(collection(db,'records'),where('date','==',date)),s=>{recs={};s.docs.forEach(d=>{const v=d.data();recs[v.uid]={...v,_id:d.id}});draw()},e=>{box.textContent='مقدرتش أقرأ البيانات: '+e.code})}
+  unsubs.push(onSnapshot(collection(db,'users'),s=>{users={};s.docs.forEach(d=>{const v=d.data();if((v.email||'').toLowerCase()!==ADMIN)users[d.id]=v});draw()},e=>{box.textContent='مقدرتش أقرأ المناديب: '+e.code}));
+  unsubs.push(()=>unRec&&unRec());sub();
+  function draw(){
+    box.textContent='';
+    const ids=Object.keys(users);Object.keys(recs).forEach(k=>{if(!users[k]&&(recs[k].email||'').toLowerCase()!==ADMIN)ids.push(k)});
+    const n={present:0,absent:0,off:0,none:0,adv:0,ended:0};
+    ids.forEach(k=>{const r=recs[k];if(!r||!r.status)n.none++;else n[r.status]++;if(r&&r.advance>0&&r.advanceStatus!=='approved'&&r.advanceStatus!=='rejected')n.adv++;if(r&&r.ended)n.ended++});
+    const st=el('div','stats');
+    [['حاضر',n.present],['غايب',n.absent],['إجازة',n.off],['لسه ماسجلش',n.none],['سلف منتظرة',n.adv],['أنهوا العمل',n.ended]].forEach(s=>{const b=el('div','stat');b.appendChild(el('b','',s[1]));b.appendChild(el('span','',s[0]));st.appendChild(b)});
+    box.appendChild(st);
+    const c=el('div','card scroll'),t=el('table'),h=el('tr');
+    ['المندوب','الحالة','بكرا','سلفة','إنهاء العمل'].forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
+    if(!ids.length){const e=el('tr'),td=el('td','','لسه مفيش مناديب مسجلين.');td.colSpan=5;e.appendChild(td);t.appendChild(e)}
+    ids.forEach(k=>{const v=users[k]||recs[k],r=recs[k]||{},tr=el('tr');
+      tr.appendChild(el('td','',v.name||v.email));
+      tr.appendChild(el('td',r.status==='present'?'ok':r.status==='absent'?'bad':'warn',ST[r.status]||'—'));
+      tr.appendChild(el('td',r.tomorrow==='yes'?'ok':r.tomorrow==='no'?'bad':'',r.tomorrow==='yes'?'جاي':r.tomorrow==='no'?'مش جاي':'—'));
+      const ad=el('td');
+      if(r.advance>0){ad.appendChild(el('span',r.advanceStatus==='approved'?'ok':r.advanceStatus==='rejected'?'bad':'warn',r.advance+' '));
+        if(r.advanceStatus!=='approved'&&r.advanceStatus!=='rejected'){
+          [['approved','موافقة'],['rejected','رفض']].forEach(o=>{const b=el('button','sm',o[1]);b.style.marginInlineStart='4px';b.onclick=()=>updateDoc(doc(db,'records',r._id),{advanceStatus:o[0]}).catch(()=>alert('ما اتحفظش'));ad.appendChild(b)})}
+        else ad.appendChild(el('span','',r.advanceStatus==='approved'?'(موافق)':'(مرفوض)'))}
+      else ad.textContent='—';
+      tr.appendChild(ad);
+      tr.appendChild(el('td',r.ended?'ok':'',r.ended?'خلّص':(r.status?'لأ':'—')));
+      t.appendChild(tr)});
+    c.appendChild(t);box.appendChild(c);
+  }
+  header('لوحة المتابعة','اختار اليوم لمراجعة بياناته');
+  const d=el('input');d.type='date';d.value=date;d.onchange=()=>{if(d.value){date=d.value;sub()}};
+  app.appendChild(d);app.appendChild(box);
+}
+
+/* ---------- الإيميل ما اتفعلش (للمشرف) ---------- */
+function verifyView(u){
+  clear();header('تفعيل إيميل المشرف',u.email);
+  const c=el('div','card');c.appendChild(el('p','','عشان تفتح لوحة المتابعة لازم تفعّل إيميلك: افتح الإيميل واضغط على رابط التفعيل اللي اتبعتلك، وبعدين اضغط الزرار تحت.'));
+  const r=el('button','pri','فعّلت، افتح اللوحة'),s=el('button','','ابعتلي رابط التفعيل تاني'),m=el('div','msg');
+  r.onclick=async()=>{await auth.currentUser.reload();await auth.currentUser.getIdToken(true);route(auth.currentUser)};
+  s.onclick=async()=>{try{await sendEmailVerification(auth.currentUser);m.textContent='اتبعت، شوف الإيميل (وفولدر السبام)'}catch(e){m.textContent='استنى شوية وجرب تاني'}};
+  c.appendChild(r);c.appendChild(s);c.appendChild(m);app.appendChild(c);
+}
+
+function route(u){
+  if(!u)return authView();
+  if((u.email||'').toLowerCase()===ADMIN)return u.emailVerified?adminView(u):verifyView(u);
+  repView(u);
+}
+onAuthStateChanged(auth,u=>{if(!registering)route(u)});
+</script>
+</body>
+</html>
