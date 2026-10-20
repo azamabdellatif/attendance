@@ -52,10 +52,57 @@ button.sel,button.pri{background:linear-gradient(135deg,#0b6b8a,#6a5acd);color:#
 .lg i{width:12px;height:12px;border-radius:50%;flex:none}.lg span{flex:1}
 .bar{margin-top:12px}.barh{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
 .track{height:10px;border-radius:99px;background:var(--bd);overflow:hidden}.fill{height:100%;border-radius:99px;transition:width .4s}
+
+/* ===== تصميم لوحة التحكم الداكنة ===== */
+:root{--bg:#0b1520;--side:#0d1b29;--card:#112133;--bd:#1d3247;--tx:#e6edf5;--mut:#8ea3b8;--pri:#2f7bff;--on:#fff;--ok:#22c55e;--bad:#f04438;--warn:#f5a524;--info:#38bdf8;--mut2:#64748b}
+:root[data-theme="light"]{--bg:#f2f5f9;--side:#ffffff;--card:#ffffff;--bd:#dfe6ee;--tx:#14212e;--mut:#5d7086;--pri:#1d6bff;--ok:#15803d;--bad:#d92d20;--warn:#b7791f;--info:#0284c7;--mut2:#94a3b8}
+body{background:var(--bg);min-height:100vh}
+#app{max-width:1100px;margin:0 auto;padding:18px;width:100%}
+.shell{display:flex;min-height:100vh}
+.side{width:250px;flex:none;background:var(--side);border-inline-end:1px solid var(--bd);padding:16px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;padding:6px 8px 18px;font-size:16px}
+.logo{width:38px;height:38px;border-radius:10px;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex:none}
+.nav{display:flex;align-items:center;gap:10px;width:100%;text-align:right;background:none;border:0;padding:11px 12px;border-radius:10px;color:var(--mut);min-width:0;flex:none;justify-content:flex-start}
+.nav:hover{background:var(--bd);color:var(--tx)}.nav.on{background:var(--bd);color:var(--tx);font-weight:600}
+.mainc{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--bd);background:var(--side);position:sticky;top:0;z-index:10}
+.topbar .sp{flex:1}
+.ib{width:38px;height:38px;border-radius:10px;padding:0;min-width:0;flex:none;display:flex;align-items:center;justify-content:center}
+.user{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.3}.user small{display:block;color:var(--mut);font-size:11px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--bd);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.shell.auth .side,.shell.auth .topbar{display:none}
+.shell.auth #app{max-width:440px;margin:6vh auto}
+.ham,.bk{display:none}
+.pagehead{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.pico{width:46px;height:46px;border-radius:12px;background:color-mix(in srgb,var(--pri) 18%,transparent);display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.pagehead h1{margin:0}.pagehead .sub{margin:0}
+.band{background:linear-gradient(90deg,#1646b8,#1d63e8);color:#fff;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:14px}
+h2{border-inline-start:4px solid var(--pri);padding-inline-start:10px;line-height:1.3}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;box-shadow:none}
+.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat,.stat:nth-child(n){border:1px solid var(--bd);border-top:1px solid var(--bd);box-shadow:none;border-radius:14px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:right}
+.stat b{font-size:28px;line-height:1.1}.stat span{font-size:12px;color:var(--mut)}
+.sico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;flex:none}
+button.sel,button.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+.top{background:none;box-shadow:none;padding:0;border-radius:0}.top h1{color:var(--tx)}.top .sub{color:var(--mut);opacity:1}
+.top button{background:var(--card);color:var(--tx);border-color:var(--bd)}
+th{background:color-mix(in srgb,var(--bd) 45%,transparent)}
+#app>input[type=date]{max-width:260px}
+@media (max-width:900px){
+  .ham{display:flex}
+  .side{position:fixed;top:0;bottom:0;inset-inline-start:0;z-index:30;transform:translateX(100%);transition:transform .25s;height:100%;box-shadow:0 0 30px rgba(0,0,0,.4)}
+  .side.open{transform:none}
+  .bk.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:20}
+  #app{padding:14px}
+}
 </style>
 </head>
 <body>
-<main id="app"><p class="sub">جاري التحميل…</p></main>
+<div class="shell auth" id="shell">
+<aside class="side" id="side"></aside>
+<div class="mainc"><div class="topbar" id="topbar"></div><main id="app"><p class="sub">جاري التحميل…</p></main></div>
+</div>
+<div class="bk" id="bk"></div>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,sendEmailVerification,sendPasswordResetEmail,updateProfile} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -71,7 +118,26 @@ const fb=initializeApp({
 });
 const auth=getAuth(fb),db=getFirestore(fb);
 const ADMIN="azamabdellatif87@gmail.com";
-const app=document.getElementById('app');
+const app=document.getElementById('app'),shell=document.getElementById('shell'),bkEl=document.getElementById('bk');
+try{document.documentElement.dataset.theme=localStorage.getItem('theme')||'dark'}catch(e){document.documentElement.dataset.theme='dark'}
+function closeSide(){const sd=document.getElementById('side');sd&&sd.classList.remove('open');bkEl.classList.remove('show')}
+bkEl.onclick=closeSide;
+function setActive(k){document.querySelectorAll('#side .nav').forEach(b=>b.classList.toggle('on',b.dataset.k===k))}
+function setShell(u,role){
+  if(!role){shell.className='shell auth';return}
+  shell.className='shell';
+  const side=document.getElementById('side'),tb=document.getElementById('topbar');side.textContent='';tb.textContent='';
+  const br=el('div','brand');br.appendChild(el('div','logo','📋'));br.appendChild(el('span','','متابعة المناديب'));side.appendChild(br);
+  const items=role==='admin'?[['dash','🏠','لوحة التحكم',()=>adminView(u)],['report','📊','تقرير فترة',()=>reportView(u)],['cmp','📁','مقارنة بملف Excel',()=>compareView(u)]]
+    :role==='rep'?[['today','📝','تسجيل اليوم',()=>repView(u)],['acct','🗂️','حسابي وسجلاتي',()=>accountView(u.uid,u.displayName||u.email,()=>repView(u))]]:[];
+  items.forEach(i=>{const b=el('button','nav');b.dataset.k=i[0];b.appendChild(el('span','',i[1]));b.appendChild(el('span','',i[2]));b.onclick=()=>{closeSide();i[3]()};side.appendChild(b)});
+  const lo=el('button','nav');lo.style.marginTop='auto';lo.appendChild(el('span','','🚪'));lo.appendChild(el('span','','تسجيل الخروج'));lo.onclick=()=>signOut(auth);side.appendChild(lo);
+  const hb=el('button','ib ham','☰');hb.onclick=()=>{side.classList.toggle('open');bkEl.classList.toggle('show')};tb.appendChild(hb);
+  tb.appendChild(el('div','sp'));
+  const th=el('button','ib','🌓');th.onclick=()=>{const d=document.documentElement,nx=d.dataset.theme==='light'?'dark':'light';d.dataset.theme=nx;try{localStorage.setItem('theme',nx)}catch(e){}};tb.appendChild(th);
+  const nm=u.displayName||u.email||'',us=el('div','user'),inf=el('div');
+  inf.appendChild(el('div','',nm));inf.appendChild(el('small','',role==='admin'?'مشرف':role==='rep'?'مندوب':'مشرف'));
+  us.appendChild(el('div','avatar',nm.trim().charAt(0).toUpperCase()));us.appendChild(inf);tb.appendChild(us)}
 const ST={present:'حاضر',absent:'غايب',off:'إجازة'};
 const ERR={'auth/invalid-credential':'الإيميل أو الباسورد غلط','auth/invalid-login-credentials':'الإيميل أو الباسورد غلط','auth/email-already-in-use':'الإيميل ده مسجل قبل كده، سجل دخول','auth/weak-password':'الباسورد لازم يكون 6 حروف أو أرقام على الأقل','auth/invalid-email':'الإيميل مكتوب غلط','auth/missing-password':'اكتب الباسورد','auth/too-many-requests':'محاولات كتير، استنى شوية وجرب تاني'};
 let unsubs=[],registering=false;
@@ -79,8 +145,13 @@ function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 function iso(d){const m=d.getMonth()+1,k=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(k<10?'0':'')+k}
 const today=iso(new Date());
 function clear(){unsubs.forEach(f=>f());unsubs=[];app.textContent=''}
-function header(title,sub){const t=el('div','top'),l=el('div');l.appendChild(el('h1','',title));l.appendChild(el('div','sub',sub));t.appendChild(l);
-  const b=el('button','sm','خروج');b.onclick=()=>signOut(auth);t.appendChild(b);app.appendChild(t)}
+function header(title,sub){const t=el('div','pagehead'),l=el('div');t.appendChild(el('div','pico','📋'));l.appendChild(el('h1','',title));l.appendChild(el('div','sub',sub));t.appendChild(l);app.appendChild(t)}
+function iconFor(lbl){
+  const M=[['إجمالي','👥','var(--pri)'],['مناديب','👥','var(--pri)'],['مطابق','✔️','var(--ok)'],['زيادة','➕','var(--info)'],['ناقص','⚠️','var(--bad)'],['غياب','❌','var(--bad)'],['غايب','❌','var(--bad)'],['أيدل','⏸️','var(--warn)'],['إجازة','🏖️','var(--info)'],['إجازات','🏖️','var(--info)'],['سلف','💰','var(--warn)'],['أنهى','🏁','var(--ok)'],['أنهوا','🏁','var(--ok)'],['حضور','✅','var(--ok)'],['حضروا','✅','var(--ok)'],['حضر','✅','var(--ok)']];
+  return M.find(x=>lbl.includes(x[0]))||['','📊','var(--pri)']}
+function statCard(lbl,val){
+  const m=iconFor(lbl),c=el('div','stat'),i=el('div','sinfo'),b=el('b','',val);b.style.color=m[2];i.appendChild(b);i.appendChild(el('span','',lbl));
+  const ic=el('div','sico',m[1]);ic.style.background='color-mix(in srgb,'+m[2]+' 18%,transparent)';c.appendChild(i);c.appendChild(ic);return c}
 
 /* ---------- تسجيل الدخول ---------- */
 function authView(mode){
@@ -116,7 +187,7 @@ function authView(mode){
 
 /* ---------- كشف حساب مندوب ---------- */
 async function accountView(uid,name,back){
-  clear();
+  clear();setActive('acct');
   const top=el('div','top'),l=el('div');l.appendChild(el('h1','','حساب: '+(name||'')));l.appendChild(el('div','sub','كل الأيام اللي اتسجلت'));
   top.appendChild(l);const bb=el('button','sm','رجوع');bb.onclick=back;top.appendChild(bb);app.appendChild(top);
   const box=el('p','sub','جاري التحميل…');app.appendChild(box);
@@ -128,7 +199,7 @@ async function accountView(uid,name,back){
   rows.forEach(r=>{if(r.idle)n.idle++;else if(r.status)n[r.status]++;if(r.ended)n.ended++;
     if(r.advance>0){if(r.advanceStatus==='approved')n.appr+=r.advance;else if(r.advanceStatus==='rejected')n.rej+=r.advance;else n.pend+=r.advance}});
   const st=el('div','stats');
-  [['أيام حضور',n.present],['أيام أيدل',n.idle],['أيام غياب',n.absent],['إجازات',n.off],['أيام أنهى فيها العمل',n.ended],['سلف موافق عليها',n.appr],['سلف منتظرة',n.pend]].forEach(x=>{const b=el('div','stat');b.appendChild(el('b','',x[1]));b.appendChild(el('span','',x[0]));st.appendChild(b)});
+  [['أيام حضور',n.present],['أيام أيدل',n.idle],['أيام غياب',n.absent],['إجازات',n.off],['أيام أنهى فيها العمل',n.ended],['سلف موافق عليها',n.appr],['سلف منتظرة',n.pend]].forEach(x=>st.appendChild(statCard(x[0],x[1])));
   app.appendChild(st);
   const c=el('div','card scroll'),t=el('table'),h=el('tr');
   ['التاريخ','الحالة','سلفة','إنهاء العمل'].forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
@@ -145,7 +216,7 @@ async function accountView(uid,name,back){
 
 /* ---------- شاشة المندوب ---------- */
 async function repView(u){
-  clear();
+  clear();setActive('today');
   const ref=doc(db,'records',u.uid+'_'+today);let rec={},wantAdv=false;
   try{const s=await getDoc(ref);if(s.exists())rec=s.data()}catch(e){}
   const msg=el('div','msg');
@@ -162,7 +233,6 @@ async function repView(u){
   function draw(){
     app.textContent='';
     header('أهلاً '+(u.displayName||''),'تسجيل يوم '+today);
-    const ab=el('button','','حسابي وسجلاتي');ab.style.width='100%';ab.style.marginBottom='12px';ab.onclick=()=>accountView(u.uid,u.displayName||u.email,()=>repView(u));app.appendChild(ab);
     if(rec.idle){const nt=el('div','card','تم تسجيلك «أيدل» النهاردة: حضرت لكن مفيش شغل متاح من العمليات.');nt.style.borderColor='var(--warn)';app.appendChild(nt)}
     app.appendChild(group('حالتك النهاردة',[['present','حاضر'],['absent','غايب'],['off','إجازة']],'status',rec.status));
     app.appendChild(group('هتيجي بكرا؟',[['yes','أيوه جاي'],['no','لأ مش جاي']],'tomorrow',rec.tomorrow));
@@ -185,7 +255,7 @@ async function repView(u){
 
 /* ---------- لوحة المشرف ---------- */
 function adminView(u){
-  clear();
+  clear();setActive('dash');
   let date=today,users={},recs={},unRec=null;
   const box=el('div');
   function sub(){if(unRec)unRec();
@@ -203,8 +273,9 @@ function adminView(u){
       else n[r.status]++;
       if(r&&r.advance>0&&r.advanceStatus!=='approved'&&r.advanceStatus!=='rejected')n.adv++});
     const tot=ids.length,att=n.worked+n.idle,pc=(x,y)=>y?Math.round(x*100/y):0;
+    box.appendChild(el('div','band','📢 يوم '+date+' — حضروا '+att+' · أيدل '+n.idle+' · غايبين '+n.absent+' · سلف منتظرة '+n.adv));
     const st=el('div','stats');
-    [['إجمالي المناديب',tot],['حضروا',att],['أيدل',n.idle],['سلف منتظرة',n.adv]].forEach(x=>{const b=el('div','stat');b.appendChild(el('b','',x[1]));b.appendChild(el('span','',x[0]));st.appendChild(b)});
+    [['إجمالي المناديب',tot],['حضروا',att],['أيدل',n.idle],['سلف منتظرة',n.adv]].forEach(x=>st.appendChild(statCard(x[0],x[1])));
     box.appendChild(st);
     const segs=[['حضروا واشتغلوا',n.worked,'var(--ok)'],['أيدل (حضروا ومفيش شغل)',n.idle,'var(--warn)'],['غايبين',n.absent,'var(--bad)'],['إجازة',n.off,'var(--info)'],['لسه ماسجلوش',n.none,'var(--mut2)']];
     const an=el('div','card an');an.appendChild(el('h2','','تحليل اليوم'));
@@ -248,9 +319,6 @@ function adminView(u){
   header('لوحة المتابعة','اختار اليوم، واضغط على اسم المندوب لكشف حسابه');
   const d=el('input');d.type='date';d.value=date;d.onchange=()=>{if(d.value){date=d.value;sub()}};
   app.appendChild(d);
-  const nav=el('div','row');nav.style.margin='4px 0 12px';
-  const b1=el('button','pri','📊 تقرير أسبوع أو فترة'),b2=el('button','pri','📁 مقارنة مع ملف Excel');
-  b1.onclick=()=>reportView(u);b2.onclick=()=>compareView(u);nav.appendChild(b1);nav.appendChild(b2);app.appendChild(nav);
   app.appendChild(box);
 }
 
@@ -287,12 +355,12 @@ function tableCard(parent,title,heads,rows){
   const c=el('div','card scroll'),t=el('table'),h=el('tr');heads.forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
   if(!rows.length){const e=el('tr'),td=el('td','','مفيش بيانات.');td.colSpan=heads.length;e.appendChild(td);t.appendChild(e)}
   rows.forEach(r=>{const tr=el('tr');r.forEach(x=>tr.appendChild(el('td','',x)));t.appendChild(tr)});c.appendChild(t);parent.appendChild(c)}
-function backBtn(u){const b=el('button','','← رجوع للوحة اليوم');b.style.width='100%';b.style.marginBottom='12px';b.onclick=()=>adminView(u);app.appendChild(b)}
+function backBtn(u){}
 function dateInput(v){const i=el('input');i.type='date';i.value=v;i.style.cssText='width:auto;flex:1;min-width:140px;margin:0';return i}
 
 /* ---------- تقرير فترة (أسبوع أو أي فترة) ---------- */
 function reportView(u){
-  clear();header('تقرير فترة','نسب الحضور والغياب لأي أسبوع أو فترة تختارها');backBtn(u);
+  clear();setActive('report');header('تقرير فترة','نسب الحضور والغياب لأي أسبوع أو فترة تختارها');backBtn(u);
   const w0=weekStart(today),c=el('div','card');c.appendChild(el('h2','','اختار الفترة'));
   const f=dateInput(w0),t=dateInput(addDays(w0,6)),r1=el('div','row');r1.appendChild(f);r1.appendChild(t);c.appendChild(r1);
   const out=el('div'),q=el('div','row');q.style.marginTop='8px';
@@ -363,7 +431,7 @@ function offDays(v){const set=new Set();
   return set}
 
 function compareView(u){
-  clear();header('مقارنة مع ملف Excel','قارن أيام حضور وإجازة كل مندوب في الشيت بحضوره الفعلي في السيستم');backBtn(u);
+  clear();setActive('cmp');header('مقارنة مع ملف Excel','قارن أيام حضور وإجازة كل مندوب في الشيت بحضوره الفعلي في السيستم');backBtn(u);
   const info=el('div','card');
   info.appendChild(el('p','sub','ارفع شيت فيه لكل مندوب: اسمه (أو إيميله)، وعدد أيام حضوره، ويوم إجازته. هنقارنهم بحضوره الفعلي في السيستم خلال الأسبوع اللي تختاره، والأيدل بيتحسب حضور.'));
   const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv';info.appendChild(fi);
@@ -426,7 +494,7 @@ function compareView(u){
     if(!rows.length){out.appendChild(el('p','sub','مفيش ولا مندوب من الشيت اتطابق مع حسابات السيستم.'));return}
     const sum=k=>rows.reduce((a,x)=>a+x[k],0),E=sum('expect'),A=sum('att'),I=sum('idle'),short=rows.reduce((a,x)=>a+Math.max(0,x.expect-x.att),0),cov=E-short;
     const st=el('div','stats');
-    [['مناديب في الشيت',rows.length],['مطابق',rows.filter(x=>x.diff===0).length],['ناقص عن الشيت',rows.filter(x=>x.diff<0).length],['زيادة عن الشيت',rows.filter(x=>x.diff>0).length],['حضروا يوم إجازتهم',rows.filter(x=>x.onOff>0).length]].forEach(x=>{const b=el('div','stat');b.appendChild(el('b','',x[1]));b.appendChild(el('span','',x[0]));st.appendChild(b)});
+    [['مناديب في الشيت',rows.length],['مطابق',rows.filter(x=>x.diff===0).length],['ناقص عن الشيت',rows.filter(x=>x.diff<0).length],['زيادة عن الشيت',rows.filter(x=>x.diff>0).length],['حضروا يوم إجازتهم',rows.filter(x=>x.onOff>0).length]].forEach(x=>st.appendChild(statCard(x[0],x[1])));
     out.appendChild(st);
     breakdown(out,'نتيجة المقارنة ('+from+' إلى '+to+')',[['حضور مطابق للشيت',cov,'var(--ok)'],['نقص عن الشيت (غياب)',short,'var(--bad)']],pct(cov,E),'نسبة الحضور',
       [['حضور السيستم ÷ أيام الشيت',pct(A,E),'var(--ok)'],['نسبة النقص (الغياب)',pct(short,E),'var(--bad)'],['نسبة الأيدل من حضور السيستم',pct(I,A),'var(--warn)']]);
@@ -450,10 +518,11 @@ function verifyView(u){
 }
 
 function route(u){
-  if(!u)return authView();
-  if((u.email||'').toLowerCase()===ADMIN)return u.emailVerified?adminView(u):verifyView(u);
-  repView(u);
-}
+  if(!u){setShell(null);return authView()}
+  const isA=(u.email||'').toLowerCase()===ADMIN;
+  if(isA&&!u.emailVerified){setShell(u,'verify');return verifyView(u)}
+  setShell(u,isA?'admin':'rep');
+  return isA?adminView(u):repView(u)}
 onAuthStateChanged(auth,u=>{if(!registering)route(u)});
 </script>
 </body>
