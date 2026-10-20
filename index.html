@@ -351,14 +351,25 @@ async function readSheet(file){
   if(h<0)throw new Error('مش لاقي أعمدة في الملف.');
   return {headers:arr[h].map((x,i)=>String(x).trim()||('عمود '+(i+1))),rows:arr.slice(h+1).filter(r=>r.some(c=>String(c).trim()!==''))}}
 
+const WDN=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const WD={'سبت':6,'احد':0,'اثنين':1,'اتنين':1,'ثلاثاء':2,'تلات':2,'ثلاثا':2,'اربعاء':3,'اربع':3,'خميس':4,'جمعه':5,'sat':6,'sun':0,'mon':1,'tue':2,'wed':3,'thu':4,'fri':5};
+function numFrom(v){if(typeof v==='number')return v;const s=String(v==null?'':v).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).trim();const m=s.match(/\d+(\.\d+)?/);return m?parseFloat(m[0]):null}
+function offDays(v){const set=new Set();
+  const d=(v instanceof Date||(typeof v==='number'&&v>20000)||typeof v==='string')?toDate(v):null;
+  if(d){set.add(new Date(d+'T12:00:00').getDay());return set}
+  String(v==null?'':v).split(/[^A-Za-z\u0600-\u06FF]+/).forEach(w=>{let t=norm(w);if(!t)return;
+    if(/^[a-z]+$/.test(t))t=t.slice(0,3);else t=t.replace(/^و/,'').replace(/^ال/,'');
+    if(WD[t]!==undefined)set.add(WD[t])});
+  return set}
+
 function compareView(u){
-  clear();header('مقارنة مع ملف Excel','قارن الشيت بالحضور اللي في السيستم (الأيدل بيتحسب حضور)');backBtn(u);
+  clear();header('مقارنة مع ملف Excel','قارن أيام حضور وإجازة كل مندوب في الشيت بحضوره الفعلي في السيستم');backBtn(u);
   const info=el('div','card');
-  info.appendChild(el('p','sub','ارفع ملف Excel أو CSV فيه المناديب المطلوبين. لازم فيه عمود باسم المندوب أو إيميله، وعمود تاريخ لو الشيت فيه أيام مختلفة. بيتقرأ أول شيت في الملف.'));
+  info.appendChild(el('p','sub','ارفع شيت فيه لكل مندوب: اسمه (أو إيميله)، وعدد أيام حضوره، ويوم إجازته. هنقارنهم بحضوره الفعلي في السيستم خلال الأسبوع اللي تختاره، والأيدل بيتحسب حضور.'));
   const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv';info.appendChild(fi);
   const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
   const cfg=el('div'),out=el('div');app.appendChild(cfg);app.appendChild(out);
-  let sheet=null,sN,sE,sD,pf,pt;
+  let sheet=null,sN,sE,sC,sO,pf,pt;
   fi.onchange=async()=>{
     const file=fi.files[0];if(!file)return;msg.textContent='جاري قراءة الملف…';cfg.textContent='';out.textContent='';
     try{sheet=await readSheet(file)}catch(e){msg.textContent=e.message||'مقدرتش أقرأ الملف';return}
@@ -370,46 +381,61 @@ function compareView(u){
       s.style.cssText='width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit;margin-bottom:8px';
       const o0=document.createElement('option');o0.value='-1';o0.textContent='— بدون —';s.appendChild(o0);
       sheet.headers.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h;s.appendChild(o)});s.value=String(def);c.appendChild(w);w.appendChild(s);return s}
+    let ci=sheet.headers.findIndex(h=>{const n=norm(h);return n.includes('عدد')&&(n.includes('ايام')||n.includes('حضور')||n.includes('يوم'))});
+    if(ci<0)ci=find(['ايام','days','عدد']);
     sN=sel('عمود اسم المندوب',find(['اسم','name','مندوب']));
     sE=sel('عمود الإيميل (لو موجود)',find(['mail','ايميل','بريد']));
-    sD=sel('عمود التاريخ (لو الشيت فيه أيام)',find(['تاريخ','date','يوم']));
-    c.appendChild(el('div','sub','لو مفيش عمود تاريخ، اختار الفترة اللي المناديب دول مطلوبين فيها كل يوم:'));
+    sC=sel('عمود عدد أيام الحضور في الشيت',ci);
+    sO=sel('عمود يوم الإجازة في الشيت',find(['اجازه','راحه','off']));
+    c.appendChild(el('div','sub','اختار الأسبوع اللي الشيت بتاعه:'));
     const w0=weekStart(today),r=el('div','row');pf=dateInput(w0);pt=dateInput(addDays(w0,6));r.appendChild(pf);r.appendChild(pt);c.appendChild(r);
+    const q=el('div','row');q.style.marginTop='8px';
+    [['الأسبوع ده',w0,addDays(w0,6)],['الأسبوع اللي فات',addDays(w0,-7),addDays(w0,-1)]].forEach(x=>{const b=el('button','sm',x[0]);b.onclick=()=>{pf.value=x[1];pt.value=x[2]};q.appendChild(b)});c.appendChild(q);
     const go=el('button','pri','قارن');go.style.cssText+='width:100%;margin-top:10px';go.onclick=run;c.appendChild(go);cfg.appendChild(c)}
   async function run(){
-    const ni=+sN.value,ei=+sE.value,di=+sD.value;
+    const ni=+sN.value,ei=+sE.value,ci=+sC.value,oi=+sO.value;
     if(ni<0&&ei<0){out.textContent='اختار عمود الاسم أو الإيميل.';return}
-    if(di<0&&(!pf.value||!pt.value||pf.value>pt.value)){out.textContent='اختار فترة صحيحة.';return}
+    if(ci<0&&oi<0){out.textContent='اختار عمود عدد الأيام أو عمود يوم الإجازة.';return}
+    if(!pf.value||!pt.value||pf.value>pt.value){out.textContent='اختار فترة صحيحة.';return}
     out.textContent='جاري المقارنة…';
-    const fixed=di<0?daysBetween(pf.value,pt.value):null,items=[],seen=new Set();let badDate=0;
-    sheet.rows.forEach(r=>{const nm=ni>=0?String(r[ni]==null?'':r[ni]).trim():'',em=ei>=0?String(r[ei]==null?'':r[ei]).trim().toLowerCase():'';if(!nm&&!em)return;
-      (di>=0?[toDate(r[di])]:fixed).forEach(d=>{if(!d){badDate++;return}const key=(em||norm(nm))+'|'+d;if(seen.has(key))return;seen.add(key);items.push({nm:nm,em:em,d:d})})});
-    if(!items.length){out.textContent='مفيش صفوف صالحة في الملف'+(badDate?' (التواريخ مش مفهومة).':'.');return}
-    const ds=items.map(x=>x.d).sort(),from=ds[0],to=ds[ds.length-1];let data;
+    const from=pf.value,to=pt.value,dates=daysBetween(from,to);let data;
     try{data=await loadPeriod(from,to)}catch(e){out.textContent='مقدرتش أقرأ البيانات: '+(e.code||'');return}
     const byE={},byN={};
     Object.keys(data.users).forEach(id=>{const v=data.users[id];if(v.email)byE[v.email.toLowerCase()]=id;const k=norm(v.name);if(k)byN[k]=(byN[k]===undefined?id:null)});
-    const reps={},days={},unm=new Set(),K=['present','idle','absent','off','none'];
-    items.forEach(x=>{const uid=(x.em&&byE[x.em])||(x.nm&&byN[norm(x.nm)])||null;if(!uid){unm.add(x.nm||x.em);return}
-      const k=catOf(data.recs[uid+'_'+x.d]),un=data.users[uid];
-      const rp=reps[uid]||(reps[uid]={name:un.name||un.email,present:0,idle:0,absent:0,off:0,none:0});rp[k]++;
-      const dy=days[x.d]||(days[x.d]={present:0,idle:0,absent:0,off:0,none:0});dy[k]++});
-    const T={present:0,idle:0,absent:0,off:0,none:0};Object.values(reps).forEach(x=>K.forEach(k=>T[k]+=x[k]));
-    const tot=K.reduce((a,k)=>a+T[k],0),att=T.present+T.idle;out.textContent='';
-    if(unm.size||badDate){const w=el('div','card');w.style.borderColor='var(--warn)';
-      if(unm.size){w.appendChild(el('div','',unm.size+' من الشيت ملقيتهمش في السيستم (لازم يعملوا حساب بنفس الاسم أو الإيميل)، ومش محسوبين في النسب: '+Array.from(unm).slice(0,15).join('، ')+(unm.size>15?' …':'')))}
-      if(badDate)w.appendChild(el('div','msg',badDate+' صف تاريخه مش مفهوم واتتجاهل.'));out.appendChild(w)}
-    if(!tot){out.appendChild(el('p','sub','مفيش ولا مندوب من الشيت اتطابق مع حسابات السيستم.'));return}
-    breakdown(out,'نتيجة المقارنة ('+from+' إلى '+to+')',[['حضروا واشتغلوا',T.present,'var(--ok)'],['أيدل (محسوب حضور)',T.idle,'var(--warn)'],['غايبين',T.absent,'var(--bad)'],['إجازة',T.off,'var(--info)'],['ماسجلوش في السيستم',T.none,'var(--mut2)']],pct(att,tot),'نسبة الحضور',
-      [['نسبة الحضور (شامل الأيدل)',pct(att,tot),'var(--ok)'],['نسبة الغياب المسجل',pct(T.absent,tot),'var(--bad)'],['نسبة اللي ماسجلوش',pct(T.none,tot),'var(--mut2)'],['نسبة الإجازات',pct(T.off,tot),'var(--info)']]);
-    out.appendChild(el('div','msg','النسب من إجمالي '+tot+' (مندوب × يوم) مطلوبين في الشيت.'));
-    const H1=['المندوب','أيام الشيت','حضور','أيدل','غياب','إجازة','ماسجلش','نسبة الحضور'];
-    const rr=Object.values(reps).map(x=>{const n=K.reduce((a,k)=>a+x[k],0);return [x.name,n,x.present,x.idle,x.absent,x.off,x.none,pct(x.present+x.idle,n)]}).sort((a,b)=>a[7]-b[7]);
-    tableCard(out,'حسب المندوب (الأقل حضوراً أولاً)',H1,rr.map(r=>r.slice(0,7).concat([r[7]+'%'])));
-    const H2=['اليوم','المطلوبين','حضور','أيدل','غياب','إجازة','ماسجلوش','نسبة الحضور'];
-    const dd=Object.keys(days).sort().map(d=>{const x=days[d],n=K.reduce((a,k)=>a+x[k],0);return [d,n,x.present,x.idle,x.absent,x.off,x.none,pct(x.present+x.idle,n)]});
-    tableCard(out,'حسب اليوم',H2,dd.map(r=>r.slice(0,7).concat([r[7]+'%'])));
-    const ex=el('button','','تصدير النتيجة Excel (CSV)');ex.style.width='100%';ex.onclick=()=>csvSave('مقارنة-'+from+'_'+to+'.csv',[H1].concat(rr));out.appendChild(ex);
+    const rows=[],unm=new Set(),seen=new Set();let noNum=0,noOff=0,dup=0;
+    sheet.rows.forEach(r=>{
+      const nm=ni>=0?String(r[ni]==null?'':r[ni]).trim():'',em=ei>=0?String(r[ei]==null?'':r[ei]).trim().toLowerCase():'';if(!nm&&!em)return;
+      const uid=(em&&byE[em])||(nm&&byN[norm(nm)])||null;
+      if(!uid){unm.add(nm||em);return}
+      if(seen.has(uid)){dup++;return}seen.add(uid);
+      const planned=ci>=0?numFrom(r[ci]):null;if(ci>=0&&planned==null)noNum++;
+      const off=oi>=0?offDays(r[oi]):new Set();if(oi>=0&&!off.size&&String(r[oi]==null?'':r[oi]).trim()!=='')noOff++;
+      const c={present:0,idle:0,absent:0,off:0,none:0};let onOff=0,noneWork=0;
+      dates.forEach(d=>{const k=catOf(data.recs[uid+'_'+d]),wd=new Date(d+'T12:00:00').getDay();c[k]++;
+        if((k==='present'||k==='idle')&&off.has(wd))onOff++;
+        if(k==='none'&&!off.has(wd))noneWork++});
+      const att=c.present+c.idle,expect=planned!=null?planned:Math.max(0,dates.length-off.size),diff=att-expect,un=data.users[uid];
+      rows.push({name:un.name||un.email,off:off.size?Array.from(off).sort((x,y)=>x-y).map(i=>WDN[i]).join('، '):'—',expect:expect,att:att,idle:c.idle,absent:c.absent,sysOff:c.off,noneWork:noneWork,onOff:onOff,diff:diff,
+        pc:expect?pct(att,expect):(att?100:0),st:diff===0?'مطابق':diff<0?'ناقص '+(-diff):'زيادة '+diff})});
+    out.textContent='';
+    if(unm.size||noNum||noOff||dup){const w=el('div','card');w.style.borderColor='var(--warn)';
+      if(unm.size)w.appendChild(el('div','',unm.size+' من الشيت ملقيتهمش في السيستم (لازم يعملوا حساب بنفس الاسم أو الإيميل)، ومش محسوبين: '+Array.from(unm).slice(0,15).join('، ')+(unm.size>15?' …':'')));
+      if(noNum)w.appendChild(el('div','msg',noNum+' مندوب عدد أيامه في الشيت مش رقم، واتحسبله (أيام الأسبوع ناقص أيام الإجازة).'));
+      if(noOff)w.appendChild(el('div','msg',noOff+' مندوب يوم إجازته مش مفهوم (المفروض اسم يوم زي الجمعة أو تاريخ).'));
+      if(dup)w.appendChild(el('div','msg',dup+' صف مكرر لنفس المندوب واتتجاهل.'));out.appendChild(w)}
+    if(!rows.length){out.appendChild(el('p','sub','مفيش ولا مندوب من الشيت اتطابق مع حسابات السيستم.'));return}
+    const sum=k=>rows.reduce((a,x)=>a+x[k],0),E=sum('expect'),A=sum('att'),I=sum('idle'),short=rows.reduce((a,x)=>a+Math.max(0,x.expect-x.att),0),cov=E-short;
+    const st=el('div','stats');
+    [['مناديب في الشيت',rows.length],['مطابق',rows.filter(x=>x.diff===0).length],['ناقص عن الشيت',rows.filter(x=>x.diff<0).length],['زيادة عن الشيت',rows.filter(x=>x.diff>0).length],['حضروا يوم إجازتهم',rows.filter(x=>x.onOff>0).length]].forEach(x=>{const b=el('div','stat');b.appendChild(el('b','',x[1]));b.appendChild(el('span','',x[0]));st.appendChild(b)});
+    out.appendChild(st);
+    breakdown(out,'نتيجة المقارنة ('+from+' إلى '+to+')',[['حضور مطابق للشيت',cov,'var(--ok)'],['نقص عن الشيت (غياب)',short,'var(--bad)']],pct(cov,E),'نسبة الحضور',
+      [['حضور السيستم ÷ أيام الشيت',pct(A,E),'var(--ok)'],['نسبة النقص (الغياب)',pct(short,E),'var(--bad)'],['نسبة الأيدل من حضور السيستم',pct(I,A),'var(--warn)']]);
+    out.appendChild(el('div','msg','النسب = مجموع أيام الحضور في السيستم ÷ مجموع أيام الشيت ('+A+' ÷ '+E+'). الأيدل محسوب حضور.'));
+    rows.sort((x,y)=>x.diff-y.diff||(x.name>y.name?1:-1));
+    const H=['المندوب','يوم الإجازة (شيت)','أيام الشيت','حضور السيستم','منهم أيدل','غياب مسجل','إجازة مسجلة','أيام شغل ماسجلش فيها','حضر يوم إجازته','الفرق','نسبة الحضور','الحالة'];
+    const R=rows.map(x=>[x.name,x.off,x.expect,x.att,x.idle,x.absent,x.sysOff,x.noneWork,x.onOff,x.diff,x.pc,x.st]);
+    tableCard(out,'حسب المندوب (الناقصين أولاً)',H,R.map(r=>r.slice(0,10).concat([r[10]+'%',r[11]])));
+    const ex=el('button','','تصدير النتيجة Excel (CSV)');ex.style.width='100%';ex.onclick=()=>csvSave('مقارنة-'+from+'_'+to+'.csv',[H].concat(R));out.appendChild(ex);
   }
 }
 
