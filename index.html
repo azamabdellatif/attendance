@@ -38,7 +38,7 @@ th{color:var(--mut);font-weight:600}
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,sendEmailVerification,sendPasswordResetEmail,updateProfile} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {getFirestore,doc,getDoc,setDoc,updateDoc,collection,query,where,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,collection,query,where,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fb=initializeApp({
   apiKey:"AIzaSyCvLvPjnXCnwenVZazbrBlLza3ZqpQRWCs",
@@ -92,6 +92,36 @@ function authView(mode){
   app.appendChild(c);
 }
 
+
+/* ---------- كشف حساب مندوب ---------- */
+async function accountView(uid,name,back){
+  clear();
+  const top=el('div','top'),l=el('div');l.appendChild(el('h1','','حساب: '+(name||'')));l.appendChild(el('div','sub','كل الأيام اللي اتسجلت'));
+  top.appendChild(l);const bb=el('button','sm','رجوع');bb.onclick=back;top.appendChild(bb);app.appendChild(top);
+  const box=el('p','sub','جاري التحميل…');app.appendChild(box);
+  let rows=[];
+  try{const s=await getDocs(query(collection(db,'records'),where('uid','==',uid)));rows=s.docs.map(d=>d.data())}
+  catch(e){box.textContent='مقدرتش أقرأ السجل: '+(e.code||'');return}
+  rows.sort((a,b)=>a.date<b.date?1:-1);box.remove();
+  const n={present:0,absent:0,off:0,ended:0,appr:0,pend:0,rej:0};
+  rows.forEach(r=>{if(r.status)n[r.status]++;if(r.ended)n.ended++;
+    if(r.advance>0){if(r.advanceStatus==='approved')n.appr+=r.advance;else if(r.advanceStatus==='rejected')n.rej+=r.advance;else n.pend+=r.advance}});
+  const st=el('div','stats');
+  [['أيام حضور',n.present],['أيام غياب',n.absent],['إجازات',n.off],['أيام أنهى فيها العمل',n.ended],['سلف موافق عليها',n.appr],['سلف منتظرة',n.pend]].forEach(x=>{const b=el('div','stat');b.appendChild(el('b','',x[1]));b.appendChild(el('span','',x[0]));st.appendChild(b)});
+  app.appendChild(st);
+  const c=el('div','card scroll'),t=el('table'),h=el('tr');
+  ['التاريخ','الحالة','سلفة','إنهاء العمل'].forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
+  if(!rows.length){const e=el('tr'),td=el('td','','مفيش سجلات لسه.');td.colSpan=4;e.appendChild(td);t.appendChild(e)}
+  rows.forEach(r=>{const tr=el('tr');
+    tr.appendChild(el('td','',r.date));
+    tr.appendChild(el('td',r.status==='present'?'ok':r.status==='absent'?'bad':'warn',ST[r.status]||'—'));
+    const a=r.advance>0?r.advance+' ('+(r.advanceStatus==='approved'?'موافق':r.advanceStatus==='rejected'?'مرفوض':'منتظر')+')':'—';
+    tr.appendChild(el('td',r.advance>0?(r.advanceStatus==='approved'?'ok':r.advanceStatus==='rejected'?'bad':'warn'):'',a));
+    tr.appendChild(el('td',r.ended?'ok':'',r.ended?'خلّص':'—'));
+    t.appendChild(tr)});
+  c.appendChild(t);app.appendChild(c);
+}
+
 /* ---------- شاشة المندوب ---------- */
 async function repView(u){
   clear();
@@ -111,6 +141,7 @@ async function repView(u){
   function draw(){
     app.textContent='';
     header('أهلاً '+(u.displayName||''),'تسجيل يوم '+today);
+    const ab=el('button','','حسابي وسجلاتي');ab.style.width='100%';ab.style.marginBottom='12px';ab.onclick=()=>accountView(u.uid,u.displayName||u.email,()=>repView(u));app.appendChild(ab);
     app.appendChild(group('حالتك النهاردة',[['present','حاضر'],['absent','غايب'],['off','إجازة']],'status',rec.status));
     app.appendChild(group('هتيجي بكرا؟',[['yes','أيوه جاي'],['no','لأ مش جاي']],'tomorrow',rec.tomorrow));
     const a=el('div','card');a.appendChild(el('h2','','سلفة'));const yn=el('div','row');
@@ -151,7 +182,7 @@ function adminView(u){
     ['المندوب','الحالة','بكرا','سلفة','إنهاء العمل'].forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
     if(!ids.length){const e=el('tr'),td=el('td','','لسه مفيش مناديب مسجلين.');td.colSpan=5;e.appendChild(td);t.appendChild(e)}
     ids.forEach(k=>{const v=users[k]||recs[k],r=recs[k]||{},tr=el('tr');
-      tr.appendChild(el('td','',v.name||v.email));
+      const nm=el('td'),nb=el('button','link',v.name||v.email);nb.onclick=()=>accountView(k,v.name||v.email,()=>adminView(u));nm.appendChild(nb);tr.appendChild(nm);
       tr.appendChild(el('td',r.status==='present'?'ok':r.status==='absent'?'bad':'warn',ST[r.status]||'—'));
       tr.appendChild(el('td',r.tomorrow==='yes'?'ok':r.tomorrow==='no'?'bad':'',r.tomorrow==='yes'?'جاي':r.tomorrow==='no'?'مش جاي':'—'));
       const ad=el('td');
@@ -165,7 +196,7 @@ function adminView(u){
       t.appendChild(tr)});
     c.appendChild(t);box.appendChild(c);
   }
-  header('لوحة المتابعة','اختار اليوم لمراجعة بياناته');
+  header('لوحة المتابعة','اختار اليوم، واضغط على اسم المندوب لكشف حسابه');
   const d=el('input');d.type='date';d.value=date;d.onchange=()=>{if(d.value){date=d.value;sub()}};
   app.appendChild(d);app.appendChild(box);
 }
