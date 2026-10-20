@@ -136,8 +136,13 @@ function setShell(u,role){
   tb.appendChild(el('div','sp'));
   const th=el('button','ib','🌓');th.onclick=()=>{const d=document.documentElement,nx=d.dataset.theme==='light'?'dark':'light';d.dataset.theme=nx;try{localStorage.setItem('theme',nx)}catch(e){}};tb.appendChild(th);
   const nm=u.displayName||u.email||'',us=el('div','user'),inf=el('div');
-  inf.appendChild(el('div','',nm));inf.appendChild(el('small','',role==='admin'?'مشرف':role==='rep'?'مندوب':'مشرف'));
-  us.appendChild(el('div','avatar',nm.trim().charAt(0).toUpperCase()));us.appendChild(inf);tb.appendChild(us)}
+  inf.appendChild(el('div','',nm));inf.appendChild(el('small','',(role==='rep'?'مندوب':'مشرف')+' · تعديل الاسم ✎'));
+  us.appendChild(el('div','avatar',nm.trim().charAt(0).toUpperCase()));us.appendChild(inf);
+  us.style.cursor='pointer';us.title='اضغط لتعديل اسمك';
+  us.onclick=async()=>{const n=prompt('اكتب اسمك الجديد:',u.displayName||'');if(!n||!n.trim())return;
+    try{await updateProfile(auth.currentUser,{displayName:n.trim()});await setDoc(doc(db,'users',u.uid),{name:n.trim(),email:u.email},{merge:true});route(auth.currentUser)}
+    catch(e){alert('الاسم ما اتغيرش، جرب تاني')}};
+  tb.appendChild(us)}
 const ST={present:'حاضر',absent:'غايب',off:'إجازة'};
 const ERR={'auth/invalid-credential':'الإيميل أو الباسورد غلط','auth/invalid-login-credentials':'الإيميل أو الباسورد غلط','auth/email-already-in-use':'الإيميل ده مسجل قبل كده، سجل دخول','auth/weak-password':'الباسورد لازم يكون 6 حروف أو أرقام على الأقل','auth/invalid-email':'الإيميل مكتوب غلط','auth/missing-password':'اكتب الباسورد','auth/too-many-requests':'محاولات كتير، استنى شوية وجرب تاني'};
 let unsubs=[],registering=false;
