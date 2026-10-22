@@ -88,6 +88,18 @@ button.sel,button.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
 .top button{background:var(--card);color:var(--tx);border-color:var(--bd)}
 th{background:color-mix(in srgb,var(--bd) 45%,transparent)}
 #app>input[type=date]{max-width:260px}
+textarea{font:inherit}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.mbox{background:var(--card);border:1px solid var(--bd);border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:14px}
+.mbox img{width:100%;border-radius:10px;display:block}
+.jrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.jrow input,.jrow select{margin:0}
+details{border:1px solid var(--bd);border-radius:12px;padding:8px 12px;margin-bottom:8px;background:var(--card)}
+summary{cursor:pointer;font-weight:600}
+.wrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--bd)}.wrow .sp{flex:1}
+.hero{width:100%;max-height:300px;object-fit:cover;border-radius:12px;margin-bottom:12px}
+.note{font-size:12px;color:var(--mut);line-height:1.5}
+.shell.auth.pub #app{max-width:760px;margin:3vh auto}
 .avatar{overflow:hidden}.avatar img{width:100%;height:100%;object-fit:cover}
 .prof{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.prof h1{margin:0}.prof .sub{margin:0}
 .rrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px}.rmid{flex:1;min-width:150px}.rmid .sub{margin:0;font-size:12px}
@@ -114,7 +126,7 @@ th{background:color-mix(in srgb,var(--bd) 45%,transparent)}
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,sendEmailVerification,sendPasswordResetEmail,updateProfile} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,collection,query,where,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getFirestore,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,collection,query,where,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fb=initializeApp({
   apiKey:"AIzaSyCvLvPjnXCnwenVZazbrBlLza3ZqpQRWCs",
@@ -136,8 +148,8 @@ function setShell(u,role){
   shell.className='shell';
   const side=document.getElementById('side'),tb=document.getElementById('topbar');side.textContent='';tb.textContent='';
   const br=el('div','brand');br.appendChild(el('div','logo','📋'));br.appendChild(el('span','','متابعة المناديب'));side.appendChild(br);
-  const items=role==='admin'?[['dash','🏠','لوحة التحكم',()=>adminView(u)],['reps','👥','المناديب والبحث',()=>repsView(u)],['report','📊','تقرير فترة',()=>reportView(u)],['cmp','📁','مقارنة بملف Excel',()=>compareView(u)]]
-    :role==='rep'?[['today','📝','تسجيل اليوم',()=>repView(u)],['acct','🗂️','حسابي وسجلاتي',()=>accountView(u.uid,u.displayName||u.email,()=>repView(u))]]:[];
+  const items=role==='admin'?[['dash','🏠','لوحة التحكم',()=>adminView(u)],['reps','👥','المناديب والبحث',()=>repsView(u)],['report','📊','تقرير فترة',()=>reportView(u)],['export','📤','سحب الحضور وحالة بكرا',()=>exportView(u)],['cmp','📁','مقارنة بملف Excel',()=>compareView(u)],['inbox','💡','الاقتراحات والترشيحات',()=>inboxView(u)],['jobs','🧾','صفحة التوظيف والتسعير',()=>jobsAdminView(u)]]
+    :role==='rep'?[['today','📝','تسجيل اليوم',()=>repView(u)],['suggest','💡','اقتراحات وترشيح',()=>suggestView(u)],['acct','🗂️','حسابي وسجلاتي',()=>accountView(u.uid,u.displayName||u.email,()=>repView(u))]]:[];
   items.forEach(i=>{const b=el('button','nav');b.dataset.k=i[0];b.appendChild(el('span','',i[1]));b.appendChild(el('span','',i[2]));b.onclick=()=>{closeSide();i[3]()};side.appendChild(b)});
   const lo=el('button','nav');lo.style.marginTop='auto';lo.appendChild(el('span','','🚪'));lo.appendChild(el('span','','تسجيل الخروج'));lo.onclick=()=>signOut(auth);side.appendChild(lo);
   const hb=el('button','ib ham','☰');hb.onclick=()=>{side.classList.toggle('open');bkEl.classList.toggle('show')};tb.appendChild(hb);
@@ -184,14 +196,39 @@ function barEl(label,val,color){const bar=el('div','bar'),hd=el('div','barh');hd
 function stSelect(cur,withAll){const s=document.createElement('select');s.style.cssText=SELCSS;
   (withAll?[['all','كل المحطات']]:[['','اختار المحطة']]).concat(STATIONS.map(x=>[x,x])).forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];s.appendChild(op)});s.value=cur||(withAll?'all':'');return s}
 
+/* ---------- أدوات المرحلة الجديدة ---------- */
+const CYCLES=['A','B','A+B','C','1'];
+const SITE=location.origin+location.pathname;
+const DEFAULT_TPL='صباح/مساء الخير\nتم ترشيحك لوظيفة مندوب شحن أمازون\nلمعرفة التفاصيل برجاء الدخول على الرابط التالي\n{link}';
+function waLink(phone,text){let d=String(phone||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);else if(d.startsWith('0'))d='20'+d.slice(1);else if(d.length===10&&d[0]==='1')d='20'+d;return d?'https://wa.me/'+d+'?text='+encodeURIComponent(text):''}
+function stLabel(r){return r.idle?'أيدل':(r.status==='present'&&r.cycle?'سيكل '+r.cycle:(ST[r.status]||'—'))}
+function pickImage(max,q,sq){return new Promise(res=>{const i=document.createElement('input');i.type='file';i.accept='image/*';
+  i.onchange=()=>{const f=i.files[0];if(!f)return res(null);const r=new FileReader();
+    r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');let sx=0,sy=0,sw=im.width,sh=im.height;
+      if(sq){const m=Math.min(im.width,im.height);sx=(im.width-m)/2;sy=(im.height-m)/2;sw=sh=m;c.width=c.height=max}
+      else{const k=Math.min(1,max/Math.max(im.width,im.height));c.width=Math.round(im.width*k);c.height=Math.round(im.height*k)}
+      c.getContext('2d').drawImage(im,sx,sy,sw,sh,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',q))};im.onerror=()=>res(null);im.src=r.result};
+    r.readAsDataURL(f)};i.click()})}
+function modal(fill){const m=el('div','modal'),b=el('div','mbox');m.appendChild(b);m.onclick=e=>{if(e.target===m)m.remove()};document.body.appendChild(m);fill(b,()=>m.remove())}
+function openAtt(uid,date,kind,after){
+  const id=uid+'_'+date+'_'+kind,flag='photo'+kind.charAt(0).toUpperCase()+kind.slice(1);
+  modal((b,close)=>{b.appendChild(el('p','sub','جاري التحميل…'));
+    getDoc(doc(db,'attachments',id)).then(sn=>{b.textContent='';
+      if(!sn.exists())b.appendChild(el('p','sub','الصورة مش موجودة (اتمسحت أو ما اترفعتش).'));
+      else{const im=document.createElement('img');im.src=sn.data().data;b.appendChild(im);
+        const dl=el('button','','🗑 مسح الصورة');dl.style.cssText+='width:100%;margin-top:10px';
+        dl.onclick=async()=>{if(!confirm('تمسح الصورة نهائياً؟'))return;
+          try{await deleteDoc(doc(db,'attachments',id));await updateDoc(doc(db,'records',uid+'_'+date),{[flag]:false});close();after&&after()}catch(e){alert('ما اتمسحتش')}};b.appendChild(dl)}
+      const cl=el('button','pri','إغلاق');cl.style.cssText+='width:100%;margin-top:8px';cl.onclick=close;b.appendChild(cl)},()=>{b.textContent='مقدرتش أقرأ الصورة'})})}
+
 /* ---------- تسجيل الدخول ---------- */
 function authView(mode){
   clear();mode=mode||'login';
   app.appendChild(el('h1','','حضور المناديب'));
   app.appendChild(el('div','sub',mode==='login'?'سجل دخول بإيميلك':'اعمل حساب جديد بإيميلك'));
-  const c=el('div','card'),name=el('input'),em=el('input'),pw=el('input'),msg=el('div','msg err'),stSel=stSelect('',false);
+  const c=el('div','card'),name=el('input'),em=el('input'),pw=el('input'),msg=el('div','msg err'),stSel=stSelect('',false),ph=el('input');ph.type='tel';ph.placeholder='رقم الواتساب (اختياري)';ph.dir='ltr';
   name.placeholder='الاسم بالكامل';em.type='email';em.placeholder='الإيميل (Gmail أو Outlook أو أي إيميل)';em.dir='ltr';pw.type='password';pw.placeholder='الباسورد (6 على الأقل)';pw.dir='ltr';
-  if(mode==='register'){c.appendChild(name);c.appendChild(stSel)}c.appendChild(em);c.appendChild(pw);
+  if(mode==='register'){c.appendChild(name);c.appendChild(stSel);c.appendChild(ph)}c.appendChild(em);c.appendChild(pw);
   const go=el('button','pri',mode==='login'?'دخول':'إنشاء حساب');
   go.onclick=async()=>{
     msg.textContent='';go.disabled=true;
@@ -203,7 +240,7 @@ function authView(mode){
         registering=true;
         const r=await createUserWithEmailAndPassword(auth,em.value.trim(),pw.value);
         await updateProfile(r.user,{displayName:name.value.trim()});
-        await setDoc(doc(db,'users',r.user.uid),{name:name.value.trim(),email:r.user.email,station:stSel.value});
+        await setDoc(doc(db,'users',r.user.uid),{name:name.value.trim(),email:r.user.email,station:stSel.value,phone:ph.value.trim()});
         try{await sendEmailVerification(r.user)}catch(e){}
         registering=false;route(auth.currentUser);
       }
@@ -252,7 +289,7 @@ async function accountView(uid,name,back){
     out.appendChild(st);
     breakdown(out,'ملخص الفترة',[['حضر واشتغل',n.present,'var(--ok)'],['أيدل (محسوب حضور)',n.idle,'var(--warn)'],['غياب',n.absent,'var(--bad)'],['إجازة',n.off,'var(--info)']],pct(att,tot),'نسبة الحضور',
       [['نسبة الحضور (شامل الأيدل)',pct(att,tot),'var(--ok)'],['نسبة الغياب',pct(n.absent,tot),'var(--bad)'],['نسبة تشغيل المنتور (من أيام الشغل)',pct(n.mentor,n.present),'var(--info)']]);
-    tableCard(out,'الأيام',['التاريخ','الحالة','بكرا','سلفة','إنهاء العمل','منتور'],rs.map(r=>[r.date,r.idle?'أيدل':(ST[r.status]||'—'),r.tomorrow==='yes'?'جاي':r.tomorrow==='no'?'مش جاي':'—',
+    tableCard(out,'الأيام',['التاريخ','الحالة','بكرا','سلفة','إنهاء العمل','منتور'],rs.map(r=>[r.date,stLabel(r),r.tomorrow==='yes'?'جاي':r.tomorrow==='no'?'مش جاي':'—',
       r.advance>0?r.advance+' ('+(r.advanceStatus==='approved'?'موافق':r.advanceStatus==='rejected'?'مرفوض':'منتظر')+')':'—',r.ended?'خلّص':'—',r.mentor?'✔':(r.mentor===false?'✘':'—')]))
   }
   render();
@@ -261,39 +298,71 @@ async function accountView(uid,name,back){
 /* ---------- شاشة المندوب ---------- */
 async function repView(u){
   clear();setActive('today');
-  const ref=doc(db,'records',u.uid+'_'+today);let rec={},wantAdv=false;
-  try{const s=await getDoc(ref);if(s.exists())rec=s.data()}catch(e){}
-  const msg=el('div','msg');
-  async function save(p){
-    Object.assign(rec,p);msg.textContent='جاري الحفظ…';
-    try{await setDoc(ref,{...p,uid:u.uid,name:u.displayName||u.email,email:u.email,date:today},{merge:true});msg.textContent='اتحفظ ✓'}
-    catch(e){msg.textContent='ما اتحفظش، جرب تاني'}
-    draw();
-  }
-  function group(title,opts,key,cur){
-    const c=el('div','card');c.appendChild(el('h2','',title));const r=el('div','row');
-    opts.forEach(o=>{const b=el('button',cur===o[0]?'sel':'',o[1]);b.onclick=()=>save({[key]:o[0]});r.appendChild(b)});
-    c.appendChild(r);return c}
+  const rid=u.uid+'_'+today,ref=doc(db,'records',rid);let rec={};
+  try{const sn=await getDoc(ref);if(sn.exists())rec=sn.data()}catch(e){}
+  const d={work:rec.idle?'idle':(rec.status==='present'?(rec.cycle||''):(rec.status||'')),absentReason:rec.absentReason||'',absentPhoto:null,
+    tomorrow:rec.tomorrow||'',tomReason:rec.tomorrowReason||'',tomPhoto:null,wantAdv:rec.advance>0,adv:rec.advance>0?rec.advance:'',
+    ended:!!rec.ended,endPhoto:null,mentor:rec.mentor};
+  const msg=el('div','msg');let sb=null;
+  function reasonBox(key,ph){const t=document.createElement('textarea');t.placeholder=ph;t.value=d[key];t.rows=3;t.style.cssText=SELCSS+';margin-top:8px;resize:vertical';t.oninput=()=>{d[key]=t.value};return t}
+  function photoBox(key,flag,label){const w=el('div');w.style.marginTop='8px';
+    if(d[key]){const im=document.createElement('img');im.src=d[key];im.style.cssText='max-width:140px;max-height:140px;border-radius:10px;display:block;margin-bottom:6px';w.appendChild(im)}
+    else if(rec[flag])w.appendChild(el('div','msg ok','✔ فيه صورة مرفوعة قبل كده'));
+    const b=el('button','sm',(d[key]||rec[flag])?'📷 غيّر الصورة':'📷 '+label);
+    b.onclick=async()=>{const x=await pickImage(1100,0.6,false);if(x){d[key]=x;draw()}};w.appendChild(b);
+    if(d[key]){const rm=el('button','sm','إزالة');rm.style.marginInlineStart='6px';rm.onclick=()=>{d[key]=null;draw()};w.appendChild(rm)}
+    return w}
+  function pick(card,list,key,cur){const r=el('div','row');list.forEach(o=>{const b=el('button',cur===o[0]?'sel':'',o[1]);b.onclick=()=>{d[key]=o[0];draw()};r.appendChild(b)});card.appendChild(r)}
+  function ask(card,t){const q=el('div','sub',t);q.style.marginTop='10px';card.appendChild(q)}
   function draw(){
     app.textContent='';
-    header('أهلاً '+(u.displayName||''),'تسجيل يوم '+today);
-    if(rec.idle){const nt=el('div','card','تم تسجيلك «أيدل» النهاردة: حضرت لكن مفيش شغل متاح من العمليات.');nt.style.borderColor='var(--warn)';app.appendChild(nt)}
-    app.appendChild(group('حالتك النهاردة',[['present','حاضر'],['absent','غايب'],['off','إجازة']],'status',rec.status));
-    app.appendChild(group('هتيجي بكرا؟',[['yes','أيوه جاي'],['no','لأ مش جاي']],'tomorrow',rec.tomorrow));
-    const a=el('div','card');a.appendChild(el('h2','','سلفة'));const yn=el('div','row');
-    const has=rec.advance>0||wantAdv;
-    [[false,'مش محتاج سلفة'],[true,'محتاج سلفة']].forEach(o=>{const b=el('button',has===o[0]?'sel':'',o[1]);
-      b.onclick=()=>{if(o[0]){wantAdv=true;draw()}else{wantAdv=false;save({advance:0})}};yn.appendChild(b)});
-    a.appendChild(yn);
-    if(has){const i=el('input');i.type='number';i.min='1';i.placeholder='المبلغ المطلوب';i.style.marginTop='8px';i.value=rec.advance>0?rec.advance:'';
-      const sb=el('button','pri','احفظ المبلغ');sb.style.width='100%';
-      sb.onclick=()=>{const v=parseFloat(i.value);if(!(v>0)){msg.textContent='اكتب مبلغ صحيح';return}wantAdv=false;save({advance:v,advanceStatus:'pending'})};
-      a.appendChild(i);a.appendChild(sb);
-      if(rec.advance>0){const s=rec.advanceStatus;a.appendChild(el('div','msg '+(s==='approved'?'ok':s==='rejected'?'bad':'warn'),'حالة الطلب: '+(s==='approved'?'تمت الموافقة':s==='rejected'?'مرفوض':'في انتظار المراجعة')))}}
-    app.appendChild(a);
-    app.appendChild(group('إنهاء العمل',[[false,'لسه شغال'],[true,'خلصت شغل النهاردة']],'ended',!!rec.ended));
-    app.appendChild(group('شغلت منتور النهاردة؟',[[true,'أيوه شغلته'],[false,'لأ ماشغلتوش']],'mentor',rec.mentor));
-    app.appendChild(msg);
+    header('أهلاً '+(u.displayName||''),'تسجيل يوم '+today+(rec.submittedAt?' · آخر إرسال '+new Date(rec.submittedAt).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):''));
+    const q1=el('div','card');q1.appendChild(el('h2','','حالتك النهاردة'));
+    pick(q1,CYCLES.map(c=>[c,'اشتغلت سيكل '+c]).concat([['idle','أيدل (حضرت ومفيش شغل)'],['absent','غايب'],['off','إجازة']]),'work',d.work);
+    if(d.work==='absent'){ask(q1,'إيه سبب الغياب؟');q1.appendChild(reasonBox('absentReason','اكتب السبب…'));q1.appendChild(photoBox('absentPhoto','photoAbsent','أرفق صورة (لو السبب ينفع يتصور)'))}
+    app.appendChild(q1);
+    const q2=el('div','card');q2.appendChild(el('h2','','هتيجي بكرا؟'));
+    pick(q2,[['yes','أيوه جاي'],['no','لأ مش جاي']],'tomorrow',d.tomorrow);
+    if(d.tomorrow==='no'){ask(q2,'إيه السبب؟');q2.appendChild(reasonBox('tomReason','اكتب السبب…'));q2.appendChild(photoBox('tomPhoto','photoTomorrow','أرفق صورة (لو السبب ينفع يتصور)'))}
+    app.appendChild(q2);
+    const q3=el('div','card');q3.appendChild(el('h2','','سلفة'));const yn=el('div','row');
+    [[false,'مش محتاج سلفة'],[true,'محتاج سلفة']].forEach(o=>{const b=el('button',d.wantAdv===o[0]?'sel':'',o[1]);b.onclick=()=>{d.wantAdv=o[0];draw()};yn.appendChild(b)});q3.appendChild(yn);
+    if(d.wantAdv){const i=el('input');i.type='number';i.min='1';i.placeholder='المبلغ المطلوب';i.style.marginTop='8px';i.value=d.adv;i.oninput=()=>{d.adv=i.value};q3.appendChild(i);
+      if(rec.advance>0){const sx=rec.advanceStatus;q3.appendChild(el('div','msg '+(sx==='approved'?'ok':sx==='rejected'?'bad':'warn'),'حالة الطلب: '+(sx==='approved'?'تمت الموافقة':sx==='rejected'?'مرفوض':'في انتظار المراجعة')))}}
+    app.appendChild(q3);
+    if(CYCLES.includes(d.work)||!d.work){
+    const q4=el('div','card');q4.appendChild(el('h2','','إنهاء العمل'));
+    const eb=el('button',d.ended?'sel':'','✔ خلصت شغل وعملت إنهاء عمل');eb.style.width='100%';eb.onclick=()=>{d.ended=!d.ended;draw()};q4.appendChild(eb);
+    if(d.ended){ask(q4,'ارفع سكرين شوت من التطبيق بعد ما تعمل إنهاء العمل (مطلوب)');q4.appendChild(photoBox('endPhoto','photoEnd','ارفع السكرين شوت'))}
+    app.appendChild(q4);
+    const q5=el('div','card');q5.appendChild(el('h2','','شغلت منتور النهاردة؟'));
+    pick(q5,[[true,'أيوه شغلته'],[false,'لأ ماشغلتوش']],'mentor',d.mentor);app.appendChild(q5);
+    }
+    sb=el('button','pri','إرسال');sb.style.cssText+='width:100%;padding:12px';sb.onclick=submit;app.appendChild(sb);app.appendChild(msg);
+  }
+  async function submit(){
+    msg.className='msg err';
+    if(!d.work){msg.textContent='اختار حالتك النهاردة.';return}
+    if(d.work==='absent'&&!d.absentReason.trim()){msg.textContent='اكتب سبب الغياب.';return}
+    if(d.tomorrow==='no'&&!d.tomReason.trim()){msg.textContent='اكتب سبب إنك مش جاي بكرا.';return}
+    if(d.wantAdv&&!(parseFloat(d.adv)>0)){msg.textContent='اكتب مبلغ السلفة.';return}
+    if(CYCLES.includes(d.work)&&d.ended&&!d.endPhoto&&!rec.photoEnd){msg.textContent='لازم ترفع سكرين شوت إنهاء العمل.';return}
+    const p={uid:u.uid,name:u.displayName||u.email,email:u.email,date:today,submittedAt:Date.now()};
+    if(d.work==='idle'){p.status='present';p.idle=true;p.cycle=null}
+    else if(CYCLES.includes(d.work)){p.status='present';p.idle=false;p.cycle=d.work}
+    else{p.status=d.work;p.idle=false;p.cycle=null}
+    p.absentReason=d.work==='absent'?d.absentReason.trim():'';
+    if(d.tomorrow)p.tomorrow=d.tomorrow;
+    p.tomorrowReason=d.tomorrow==='no'?d.tomReason.trim():'';
+    const adv=d.wantAdv?parseFloat(d.adv):0;p.advance=adv;if(adv>0&&adv!==rec.advance)p.advanceStatus='pending';
+    const wk=CYCLES.includes(d.work);p.ended=wk?d.ended:false;if(wk){if(d.mentor!==undefined)p.mentor=d.mentor}else p.mentor=false;
+    msg.className='msg';msg.textContent='جاري الإرسال…';sb.disabled=true;
+    try{
+      for(const f of [['absent','absentPhoto'],['tomorrow','tomPhoto'],['end','endPhoto']]){
+        if(d[f[1]]){await setDoc(doc(db,'attachments',rid+'_'+f[0]),{uid:u.uid,date:today,kind:f[0],data:d[f[1]],at:Date.now()});p['photo'+f[0].charAt(0).toUpperCase()+f[0].slice(1)]=true;d[f[1]]=null}}
+      await setDoc(ref,p,{merge:true});Object.assign(rec,p);
+      draw();msg.className='msg ok';msg.textContent='اتحفظ ✓ تم الإرسال، وتقدر تعدّل وتبعت تاني.';
+    }catch(e){msg.className='msg err';msg.textContent='ما اتبعتش، جرب تاني ('+(e.code||'')+')';sb.disabled=false}
   }
   draw();
 }
@@ -326,16 +395,26 @@ function adminView(u){
       c.appendChild(el('b','',sn));c.appendChild(el('div','sub',cnt+' مندوب · حضروا '+a2+' · شغلوا منتور '+m.mentor+' من '+m.worked));
       c.appendChild(barEl('نسبة الحضور',pc(a2,cnt),'var(--ok)'));c.appendChild(barEl('نسبة المنتور (من اللي اشتغلوا)',pc(m.mentor,m.worked),'var(--info)'));c.appendChild(barEl('نسبة الأيدل من الحاضرين',pc(m.idle,a2),'var(--warn)'));g.appendChild(c)});
     sc.appendChild(g);box.appendChild(sc);
+    const rm=el('div','card');rm.appendChild(el('h2','','تذكيرات واتساب'));
+    rm.appendChild(el('div','note','بتضغط على الزرار فيفتحلك واتساب برسالة جاهزة تبعتها بنفسك.'));
+    const lists=[['ماسجلوش حضور النهاردة',ids.filter(k=>{const r=recs[k];return !r||(!r.status&&!r.idle)}),n2=>'صباح الخير '+n2+'\nمن فضلك سجّل حضورك النهاردة على الرابط:\n'+SITE],
+      ['اشتغلوا ولسه ماعملوش إنهاء عمل',ids.filter(k=>{const r=recs[k];return r&&r.status==='present'&&!r.idle&&!r.ended}),n2=>'مساء الخير '+n2+'\nمن فضلك سجّل إنهاء العمل وارفع سكرين شوت من الرابط:\n'+SITE]];
+    lists.forEach(L=>{const dt=document.createElement('details'),sm=document.createElement('summary');sm.textContent='📲 '+L[0]+' ('+L[1].length+')';dt.appendChild(sm);
+      if(!L[1].length)dt.appendChild(el('div','note','مفيش حد.'));
+      L[1].forEach(k=>{const v=users[k]||recs[k]||{},w=el('div','wrow');w.appendChild(avatarEl(v.photo,v.name||v.email,26));w.appendChild(el('span','',v.name||v.email));w.appendChild(el('span','note',stK(k)));w.appendChild(el('span','sp'));
+        const url=waLink(v.phone,L[2](v.name||''));const b=el('button','sm',url?'واتساب':'بدون رقم');b.disabled=!url;b.onclick=()=>window.open(url,'_blank');w.appendChild(b);dt.appendChild(w)});
+      rm.appendChild(dt)});
+    box.appendChild(rm);
     const segs=[['حضروا واشتغلوا',n.worked,'var(--ok)'],['أيدل (حضروا ومفيش شغل)',n.idle,'var(--warn)'],['غايبين',n.absent,'var(--bad)'],['إجازة',n.off,'var(--info)'],['لسه ماسجلوش',n.none,'var(--mut2)']];
     breakdown(box,'تحليل اليوم'+(stF==='all'?'':' — '+stF),segs,pc(att,tot),'نسبة الحضور',
       [['نسبة الحضور من إجمالي المناديب',pc(att,tot),'var(--ok)'],['نسبة الشغل الفعلي من الحاضرين',pc(n.worked,att),'#6a5acd'],['نسبة الأيدل من الحاضرين',pc(n.idle,att),'var(--warn)'],['نسبة تشغيل المنتور من اللي اشتغلوا',pc(n.mentor,n.worked),'var(--info)'],['نسبة الغياب من إجمالي المناديب',pc(n.absent,tot),'var(--bad)']]);
     const c=el('div','card scroll'),t=el('table'),h=el('tr');
-    ['المندوب','المحطة','الحالة','بكرا','سلفة','إنهاء العمل','منتور','أيدل'].forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
-    if(!ids.length){const e=el('tr'),td=el('td','','لسه مفيش مناديب مسجلين.');td.colSpan=8;e.appendChild(td);t.appendChild(e)}
+    ['المندوب','المحطة','الحالة','بكرا','سلفة','إنهاء العمل','منتور','أيدل','ملاحظات ومرفقات'].forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
+    if(!ids.length){const e=el('tr'),td=el('td','','لسه مفيش مناديب مسجلين.');td.colSpan=9;e.appendChild(td);t.appendChild(e)}
     ids.slice().sort((a,b)=>(stK(a)>stK(b)?1:stK(a)<stK(b)?-1:0)).forEach(k=>{const v=users[k]||recs[k],r=recs[k]||{},tr=el('tr');
       const nm=el('td'),w=el('div','nmc'),nb=el('button','link',v.name||v.email);w.appendChild(avatarEl(v.photo,v.name||v.email,28));w.appendChild(nb);nb.onclick=()=>accountView(k,v.name||v.email,()=>adminView(u));nm.appendChild(w);tr.appendChild(nm);
       tr.appendChild(el('td','',stK(k)));
-      tr.appendChild(el('td',r.idle?'warn':r.status==='present'?'ok':r.status==='absent'?'bad':'warn',r.idle?'أيدل':(ST[r.status]||'—')));
+      tr.appendChild(el('td',r.idle?'warn':r.status==='present'?'ok':r.status==='absent'?'bad':'warn',stLabel(r)));
       tr.appendChild(el('td',r.tomorrow==='yes'?'ok':r.tomorrow==='no'?'bad':'',r.tomorrow==='yes'?'جاي':r.tomorrow==='no'?'مش جاي':'—'));
       const ad=el('td');
       if(r.advance>0){ad.appendChild(el('span',r.advanceStatus==='approved'?'ok':r.advanceStatus==='rejected'?'bad':'warn',r.advance+' '));
@@ -355,6 +434,14 @@ function adminView(u){
       else{const ib=el('button','sm',r.idle?'إلغاء الأيدل':'سجّل أيدل');
         ib.onclick=()=>{const p=r._id?updateDoc(doc(db,'records',r._id),{idle:!r.idle}):setDoc(doc(db,'records',k+'_'+date),{uid:k,name:v.name||'',email:v.email||'',date:date,idle:true});p.catch(()=>alert('ما اتحفظش'))};it.appendChild(ib)}
       tr.appendChild(it);
+      const nt=el('td');nt.style.whiteSpace='normal';nt.style.minWidth='170px';
+      const line=(txt,flag,kind)=>{const w=el('div','note');w.appendChild(document.createTextNode(txt+' '));
+        if(r[flag]){const b=el('button','sm','📎');b.onclick=()=>openAtt(k,date,kind,()=>{});w.appendChild(b)}nt.appendChild(w)};
+      if(r.status==='absent'&&(r.absentReason||r.photoAbsent))line('غياب: '+(r.absentReason||''),'photoAbsent','absent');
+      if(r.tomorrow==='no')line('مش جاي بكرا: '+(r.tomorrowReason||''),'photoTomorrow','tomorrow');
+      if(r.photoEnd)line('سكرين إنهاء العمل','photoEnd','end');
+      if(!nt.childNodes.length)nt.textContent='—';
+      tr.appendChild(nt);
       t.appendChild(tr)});
     c.appendChild(t);box.appendChild(c);
   }
@@ -374,10 +461,12 @@ function repsView(u){
   function row(k,v){
     const c=el('div','card rrow');if(v.active===false)c.style.opacity='.55';c.appendChild(avatarEl(v.photo,v.name||v.email,46));
     const mid=el('div','rmid'),nb=el('button','link',v.name||v.email);nb.onclick=()=>accountView(k,v.name||v.email,()=>repsView(u));mid.appendChild(nb);
-    mid.appendChild(el('div','sub',(v.email||'')+(v.active===false?' · موقوف':'')));c.appendChild(mid);
+    mid.appendChild(el('div','sub',(v.email||'')+(v.phone?' · 📞 '+v.phone:'')+(v.tid?' · TID: '+v.tid:'')+(v.active===false?' · موقوف':'')));c.appendChild(mid);
     const act=el('div','ract'),sel=stSelect(STATIONS.includes(v.station)?v.station:'',false);sel.onchange=()=>updateDoc(doc(db,'users',k),{station:sel.value}).catch(fail);act.appendChild(sel);
     const b1=el('button','sm','✎ الاسم');b1.onclick=()=>{const n=prompt('اسم المندوب:',v.name||'');if(n&&n.trim())updateDoc(doc(db,'users',k),{name:n.trim()}).catch(fail)};act.appendChild(b1);
     const b2=el('button','sm','📷 صورة');b2.onclick=async()=>{const d=await pickPhoto();if(d)updateDoc(doc(db,'users',k),{photo:d}).catch(fail)};act.appendChild(b2);
+    const b4=el('button','sm','📞 الرقم');b4.onclick=()=>{const n=prompt('رقم الواتساب (مثال 01012345678):',v.phone||'');if(n!==null)updateDoc(doc(db,'users',k),{phone:n.trim()}).catch(fail)};act.appendChild(b4);
+    const b5=el('button','sm','🆔 TID');b5.onclick=()=>{const n=prompt('الـ TID (Transporter ID):',v.tid||'');if(n!==null)updateDoc(doc(db,'users',k),{tid:n.trim()}).catch(fail)};act.appendChild(b5);
     const b3=el('button','sm',v.active===false?'تفعيل':'إيقاف');b3.onclick=()=>updateDoc(doc(db,'users',k),{active:v.active===false}).catch(fail);act.appendChild(b3);
     c.appendChild(act);return c}
   function draw(){
@@ -580,6 +669,158 @@ function compareView(u){
   }
 }
 
+/* ---------- سحب الحضور وحالة بكرا ---------- */
+function exportView(u){
+  clear();setActive('export');header('سحب الحضور وحالة بكرا','نزّل الحضور كشيت، وجهّز حالة بكرا للصقها في جوجل شيت');
+  const byName=(a,b)=>String(a).localeCompare(String(b),'ar');
+  const w0=weekStart(today),c=el('div','card');c.appendChild(el('h2','','سحب الحضور والأيام'));
+  const f=dateInput(w0),t=dateInput(addDays(w0,6)),r1=el('div','row');r1.appendChild(f);r1.appendChild(t);c.appendChild(r1);
+  const ss=stSelect('all',true);ss.style.marginTop='8px';c.appendChild(ss);
+  const rs=document.createElement('select');rs.style.cssText=SELCSS;c.appendChild(rs);let users={};
+  function fillReps(){const cur=rs.value;rs.textContent='';const o0=document.createElement('option');o0.value='all';o0.textContent='كل المناديب';rs.appendChild(o0);
+    Object.keys(users).filter(k=>ss.value==='all'||stOf(users[k])===ss.value).sort((a,b)=>byName(users[a].name,users[b].name)).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=users[k].name||users[k].email;rs.appendChild(o)});
+    rs.value=[].some.call(rs.options,o=>o.value===cur)?cur:'all'}
+  ss.onchange=fillReps;
+  getDocs(collection(db,'users')).then(sn=>{sn.docs.forEach(x=>{const v=x.data();if((v.email||'').toLowerCase()!==ADMIN&&v.active!==false)users[x.id]=v});fillReps()}).catch(()=>{});
+  const msg=el('div','msg'),go=el('button','pri','تنزيل الحضور (Excel)');go.style.cssText+='width:100%;margin-top:6px';
+  go.onclick=async()=>{
+    if(!f.value||!t.value||f.value>t.value){msg.textContent='اختار فترة صحيحة.';return}
+    msg.textContent='جاري التجهيز…';let data;try{data=await loadPeriod(f.value,t.value)}catch(e){msg.textContent='مقدرتش أقرأ البيانات: '+(e.code||'');return}
+    const dates=daysBetween(f.value,t.value);
+    const list=Object.keys(data.users).filter(k=>data.users[k].active!==false&&(ss.value==='all'||stOf(data.users[k])===ss.value)&&(rs.value==='all'||k===rs.value)).sort((a,b)=>byName(data.users[a].name,data.users[b].name));
+    const head=['المندوب','المحطة','TID'].concat(dates).concat(['أيام الحضور (شامل الأيدل)','أيام الشغل الفعلي','أيدل','غياب','إجازة','أيام منتور']);
+    const rows=list.map(k=>{const v=data.users[k];let w=0,i=0,a=0,o=0,m=0;
+      const cells=dates.map(dt=>{const r=data.recs[k+'_'+dt],cx=catOf(r);
+        if(cx==='present'){w++;if(r.mentor)m++;return r.cycle?'سيكل '+r.cycle:'حضور'}if(cx==='idle'){i++;return 'أيدل'}if(cx==='absent'){a++;return 'غياب'}if(cx==='off'){o++;return 'إجازة'}return ''});
+      return [v.name||v.email,stOf(v),v.tid||''].concat(cells).concat([w+i,w,i,a,o,m])});
+    if(!rows.length){msg.textContent='مفيش مناديب بالاختيار ده.';return}
+    csvSave('حضور-'+f.value+'_'+t.value+'.csv',[head].concat(rows));msg.textContent='اتنزل ملف فيه '+rows.length+' مندوب.'};
+  c.appendChild(go);c.appendChild(msg);app.appendChild(c);
+
+  const c2=el('div','card');c2.appendChild(el('h2','','حالة بكرا للشيت ('+addDays(today,1)+')'));
+  c2.appendChild(el('p','note','بتتحسب من إجابات النهاردة: جاي = Present، مش جاي = Absent، ما ردش = Unreachable. محتاج TID لكل مندوب (من صفحة المناديب).'));
+  const ss2=stSelect('all',true);ss2.style.marginTop='8px';c2.appendChild(ss2);
+  const b2=el('button','pri','احسب حالة بكرا');b2.style.width='100%';const out2=el('div');
+  b2.onclick=async()=>{out2.textContent='جاري الحساب…';let data;try{data=await loadPeriod(today,today)}catch(e){out2.textContent='مقدرتش أقرأ البيانات';return}
+    const rows=Object.keys(data.users).filter(k=>data.users[k].active!==false&&(ss2.value==='all'||stOf(data.users[k])===ss2.value)).sort((a,b)=>byName(data.users[a].name,data.users[b].name)).map(k=>{
+      const v=data.users[k],r=data.recs[k+'_'+today];return [v.tid||'',v.name||v.email,stOf(v),r&&r.tomorrow==='yes'?'Present':r&&r.tomorrow==='no'?'Absent':'Unreachable']});
+    out2.textContent='';const noT=rows.filter(r=>!r[0]).length;
+    if(noT)out2.appendChild(el('div','msg err',noT+' مندوب من غير TID، ضيفه من صفحة المناديب (زرار 🆔 TID).'));
+    tableCard(out2,'',['TID','المندوب','المحطة','الحالة'],rows);
+    const row=el('div','row'),cp=el('button','','📋 نسخ (TID + الحالة) للصق في الشيت'),dl=el('button','','⬇ تنزيل CSV');
+    cp.onclick=()=>{const tx=rows.map(r=>r[0]+'\t'+r[3]).join('\n');navigator.clipboard.writeText(tx).then(()=>alert('اتنسخ ✓ الصقه في الشيت'),()=>alert('المتصفح منع النسخ، استخدم التنزيل'))};
+    dl.onclick=()=>csvSave('حالة-بكرا-'+addDays(today,1)+'.csv',[['TID','المندوب','المحطة','الحالة']].concat(rows));
+    row.appendChild(cp);row.appendChild(dl);out2.appendChild(row)};
+  c2.appendChild(b2);c2.appendChild(out2);app.appendChild(c2);
+
+  const c3=el('div','card');c3.appendChild(el('h2','','مسح الصور القديمة'));
+  c3.appendChild(el('p','note','بتمسح صور الغياب وسكرينات إنهاء العمل الأقدم من عدد الأيام اللي تحدده، عشان المساحة المجانية. تقدر كمان تمسح صورة واحدة من 📎 جنب المندوب في اللوحة.'));
+  const dn=el('input');dn.type='number';dn.min='1';dn.value='30';dn.style.maxWidth='140px';const cl=el('button','','🗑 امسح الأقدم من العدد ده من الأيام'),m3=el('div','msg');
+  cl.onclick=async()=>{const n=parseInt(dn.value,10);if(!(n>=1))return;if(!confirm('تمسح كل الصور الأقدم من '+n+' يوم؟ مفيش رجوع.'))return;
+    m3.textContent='جاري المسح…';try{const sn=await getDocs(query(collection(db,'attachments'),where('date','<',addDays(today,-n))));let k=0;for(const x of sn.docs){await deleteDoc(doc(db,'attachments',x.id));k++}m3.textContent='اتمسح '+k+' صورة.'}catch(e){m3.textContent='حصل خطأ: '+(e.code||'')}};
+  c3.appendChild(dn);c3.appendChild(cl);c3.appendChild(m3);app.appendChild(c3);
+}
+
+/* ---------- الاقتراحات والترشيحات (للمشرف) ---------- */
+function inboxView(u){
+  clear();setActive('inbox');header('الاقتراحات والترشيحات','اللي المناديب بعتوه');
+  let tpl=DEFAULT_TPL;getDoc(doc(db,'settings','jobs')).then(sn=>{if(sn.exists()&&sn.data().msg)tpl=sn.data().msg}).catch(()=>{});
+  const h1=el('h2','','ترشيحات مناديب جدد'),refs=el('div'),h2=el('h2','','اقتراحات عامة'),sug=el('div');h2.style.margin='18px 0 8px';
+  [h1,refs,h2,sug].forEach(x=>app.appendChild(x));
+  const when=t=>t?new Date(t).toLocaleDateString('ar-EG')+' '+new Date(t).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):'';
+  const STS=['جديد','اتواصلنا','مقابلة','تجربة','اتعيّن','رفض'];
+  unsubs.push(onSnapshot(collection(db,'referrals'),sn=>{refs.textContent='';const L=sn.docs.map(x=>({id:x.id,v:x.data()})).sort((a,b)=>(b.v.at||0)-(a.v.at||0));
+    if(!L.length)refs.appendChild(el('p','sub','مفيش ترشيحات لسه.'));
+    L.forEach(x=>{const v=x.v,c=el('div','card');const top=el('div','nmc');top.appendChild(el('b','',v.name));top.appendChild(el('span','note','رشّحه: '+(v.referrer||'')+' · '+when(v.at)));c.appendChild(top);
+      c.appendChild(el('div','note','📞 '+(v.phone||'—')+'   ·   واتساب: '+(v.whatsapp||'—')));
+      const act=el('div','ract');act.style.marginTop='8px';
+      const sel=document.createElement('select');sel.style.cssText=SELCSS+';width:auto;margin:0;padding:6px 8px';STS.forEach(s2=>{const o=document.createElement('option');o.value=s2;o.textContent=s2;sel.appendChild(o)});sel.value=v.status||'جديد';
+      sel.onchange=()=>updateDoc(doc(db,'referrals',x.id),{status:sel.value}).catch(()=>alert('ما اتحفظش'));act.appendChild(sel);
+      const wa=el('button','pri sm','📲 ابعت رسالة واتساب');const url=waLink(v.whatsapp||v.phone,tpl.replace('{link}',SITE+'#jobs'));wa.disabled=!url;
+      wa.onclick=()=>{window.open(url,'_blank');if((v.status||'جديد')==='جديد')updateDoc(doc(db,'referrals',x.id),{status:'اتواصلنا'}).catch(()=>{})};act.appendChild(wa);
+      const dl=el('button','sm','🗑');dl.onclick=()=>{if(confirm('تمسح الترشيح ده؟'))deleteDoc(doc(db,'referrals',x.id)).catch(()=>alert('ما اتمسحش'))};act.appendChild(dl);
+      c.appendChild(act);refs.appendChild(c)})},e=>{refs.textContent='مقدرتش أقرأ الترشيحات: '+e.code}));
+  unsubs.push(onSnapshot(collection(db,'suggestions'),sn=>{sug.textContent='';const L=sn.docs.map(x=>({id:x.id,v:x.data()})).sort((a,b)=>(b.v.at||0)-(a.v.at||0));
+    if(!L.length)sug.appendChild(el('p','sub','مفيش اقتراحات لسه.'));
+    L.forEach(x=>{const c=el('div','card'),top=el('div','nmc');top.appendChild(el('b','',x.v.name||''));top.appendChild(el('span','note',when(x.v.at)));
+      const dl=el('button','sm','🗑');dl.style.marginInlineStart='auto';dl.onclick=()=>{if(confirm('تمسح الاقتراح ده؟'))deleteDoc(doc(db,'suggestions',x.id)).catch(()=>alert('ما اتمسحش'))};top.appendChild(dl);
+      c.appendChild(top);const p=el('div','',x.v.text||'');p.style.whiteSpace='pre-wrap';p.style.marginTop='6px';c.appendChild(p);sug.appendChild(c)})},e=>{sug.textContent='مقدرتش أقرأ الاقتراحات: '+e.code}));
+}
+
+/* ---------- محرر صفحة التوظيف والتسعير (للمشرف) ---------- */
+function jobsAdminView(u){
+  clear();setActive('jobs');header('صفحة التوظيف والتسعير','اللي هنا بيظهر للمرشح في الرابط، وإنت اللي بتعدله وقت ما تحب');
+  let J={title:'وظيفة مندوب شحن أمازون',intro:'',reqs:'',contact:'',image:'',rows:[],msg:DEFAULT_TPL};
+  const box=el('div'),msg=el('div','msg');app.appendChild(box);
+  getDoc(doc(db,'settings','jobs')).then(sn=>{if(sn.exists())J=Object.assign(J,sn.data());J.rows=J.rows||[]}).catch(()=>{}).then(draw);
+  function inp(label,key,multi){const w=el('div'),l=el('div','sub',label);l.style.margin='8px 0 4px';w.appendChild(l);
+    const i=multi?document.createElement('textarea'):el('input');if(multi)i.rows=4;i.style.cssText=SELCSS+';resize:vertical';i.value=J[key]||'';i.oninput=()=>{J[key]=i.value};w.appendChild(i);return w}
+  function draw(){
+    box.textContent='';const c=el('div','card');c.appendChild(el('h2','','محتوى الصفحة'));
+    c.appendChild(inp('عنوان الصفحة','title'));c.appendChild(inp('مقدمة','intro',true));c.appendChild(inp('الشروط والمتطلبات (سطر لكل شرط)','reqs',true));c.appendChild(inp('رقم واتساب للتواصل (يظهر للمرشح)','contact'));
+    const ih=el('div','sub','صورة الصفحة');ih.style.margin='8px 0 4px';c.appendChild(ih);
+    if(J.image){const im=document.createElement('img');im.src=J.image;im.className='hero';c.appendChild(im)}
+    const r0=el('div','row'),ub=el('button','sm',J.image?'📷 غيّر الصورة':'📷 ارفع صورة'),xb=el('button','sm','🗑 امسح الصورة');
+    ub.onclick=async()=>{const x=await pickImage(900,0.7,false);if(x){J.image=x;draw()}};xb.onclick=()=>{J.image='';draw()};r0.appendChild(ub);if(J.image)r0.appendChild(xb);c.appendChild(r0);box.appendChild(c);
+    const c2=el('div','card');c2.appendChild(el('h2','','المناطق والتيرات والتسعير'));
+    J.rows.forEach((r,i)=>{const g=el('div','jrow');
+      [['zone','المنطقة'],['tier','التير'],['price','السعر'],['note','ملاحظة']].forEach(f=>{const x=el('input');x.placeholder=f[1];x.value=r[f[0]]||'';x.oninput=()=>{r[f[0]]=x.value};g.appendChild(x)});
+      const vs=document.createElement('select');vs.style.cssText=SELCSS+';margin:0';['سيدان','فان','أي عربية'].forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;vs.appendChild(o)});vs.value=r.vehicle||'سيدان';vs.onchange=()=>{r.vehicle=vs.value};g.appendChild(vs);
+      const dl=el('button','sm','🗑 حذف');dl.onclick=()=>{J.rows.splice(i,1);draw()};g.appendChild(dl);c2.appendChild(g)});
+    const ad=el('button','','➕ إضافة صف');ad.onclick=()=>{J.rows.push({zone:'',tier:'',vehicle:'سيدان',price:'',note:''});draw()};c2.appendChild(ad);box.appendChild(c2);
+    const c3=el('div','card');c3.appendChild(el('h2','','رسالة واتساب للمرشح'));c3.appendChild(inp('اكتب {link} مكان رابط الصفحة','msg',true));box.appendChild(c3);
+    const sv=el('button','pri','حفظ');sv.style.cssText+='width:100%;padding:12px';
+    sv.onclick=async()=>{msg.className='msg';msg.textContent='جاري الحفظ…';try{await setDoc(doc(db,'settings','jobs'),Object.assign({},J,{updatedAt:Date.now()}));msg.className='msg ok';msg.textContent='اتحفظ ✓'}catch(e){msg.className='msg err';msg.textContent='ما اتحفظش ('+(e.code||'')+')'}};
+    box.appendChild(sv);box.appendChild(msg);
+    const lk=el('div','card');lk.style.marginTop='12px';lk.appendChild(el('div','sub','رابط الصفحة للمرشحين:'));const lt=el('div','',SITE+'#jobs');lt.dir='ltr';lt.style.wordBreak='break-all';lk.appendChild(lt);
+    const rr=el('div','row');rr.style.marginTop='8px';const cp=el('button','sm','📋 نسخ الرابط'),pv=el('button','sm','👁 معاينة');
+    cp.onclick=()=>navigator.clipboard.writeText(SITE+'#jobs').then(()=>alert('اتنسخ ✓'),()=>alert('انسخه يدوي'));pv.onclick=()=>window.open(SITE+'#jobs','_blank');rr.appendChild(cp);rr.appendChild(pv);lk.appendChild(rr);box.appendChild(lk);
+  }
+}
+
+/* ---------- صفحة التوظيف العامة (من غير تسجيل دخول) ---------- */
+async function jobsPublic(u){
+  clear();let J=null;
+  if(u){const b=el('button','sm','← رجوع');b.onclick=()=>{location.hash='';route(auth.currentUser)};app.appendChild(b)}
+  app.appendChild(el('p','sub','جاري التحميل…'));
+  try{const sn=await getDoc(doc(db,'settings','jobs'));if(sn.exists())J=sn.data()}catch(e){}
+  clear();
+  if(u){const b=el('button','sm','← رجوع');b.style.marginBottom='10px';b.onclick=()=>{location.hash='';route(auth.currentUser)};app.appendChild(b)}
+  if(!J){app.appendChild(el('p','sub','الصفحة لسه ما اتجهزتش.'));return}
+  const c=el('div','card');
+  if(J.image){const im=document.createElement('img');im.src=J.image;im.className='hero';c.appendChild(im)}
+  const h=el('h1','',J.title||'');h.style.fontSize='24px';c.appendChild(h);
+  if(J.intro){const p=el('p','',J.intro);p.style.whiteSpace='pre-wrap';c.appendChild(p)}
+  const rq=String(J.reqs||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  if(rq.length){c.appendChild(el('h2','','الشروط والمتطلبات'));const ul=document.createElement('ul');rq.forEach(x=>{const li=document.createElement('li');li.textContent=x;ul.appendChild(li)});c.appendChild(ul)}
+  app.appendChild(c);
+  if((J.rows||[]).length)tableCard(app,'المناطق والتيرات والتسعير',['المنطقة','التير','العربية','السعر','ملاحظات'],J.rows.map(r=>[r.zone||'',r.tier||'',r.vehicle||'',r.price||'',r.note||'']));
+  const url=waLink(J.contact,'أنا مهتم بوظيفة مندوب الشحن');
+  if(url){const b=el('button','pri','📲 تواصل معانا على واتساب');b.style.cssText+='width:100%;padding:12px';b.onclick=()=>window.open(url,'_blank');app.appendChild(b)}
+}
+
+/* ---------- اقتراحات وترشيح (للمندوب) ---------- */
+function suggestView(u,tab){
+  tab=tab||'sug';clear();setActive('suggest');header('اقتراحات وترشيح','شاركنا فكرتك أو رشّح مندوب جديد');
+  const tabs=el('div','tabs');[['sug','💡 اقتراحات عامة'],['ref','🧑‍🤝‍🧑 ترشيح مندوب']].forEach(x=>{const b=el('button','sm'+(tab===x[0]?' sel':''),x[1]);b.onclick=()=>suggestView(u,x[0]);tabs.appendChild(b)});app.appendChild(tabs);
+  const c=el('div','card'),msg=el('div','msg');
+  if(tab==='sug'){
+    c.appendChild(el('h2','','قول اقتراحك'));const t=document.createElement('textarea');t.rows=5;t.placeholder='اكتب اقتراحك لتحسين الشغل…';t.style.cssText=SELCSS+';resize:vertical';c.appendChild(t);
+    const b=el('button','pri','إرسال');b.style.width='100%';
+    b.onclick=async()=>{if(!t.value.trim()){msg.className='msg err';msg.textContent='اكتب اقتراحك الأول.';return}b.disabled=true;msg.className='msg';msg.textContent='جاري الإرسال…';
+      try{await addDoc(collection(db,'suggestions'),{uid:u.uid,name:u.displayName||u.email,text:t.value.trim(),at:Date.now()});t.value='';msg.className='msg ok';msg.textContent='اتبعت ✓ شكراً ليك.'}catch(e){msg.className='msg err';msg.textContent='ما اتبعتش، جرب تاني.'}b.disabled=false};
+    c.appendChild(b)}
+  else{
+    c.appendChild(el('h2','','رشّح مندوب جديد'));
+    const mk=(ph,t)=>{const i=el('input');i.placeholder=ph;if(t){i.type=t;i.dir='ltr'}c.appendChild(i);return i};
+    const nm=mk('اسم المندوب المرشح'),ph=mk('رقم التليفون','tel'),wa=mk('رقم الواتساب','tel');
+    const b=el('button','pri','إرسال');b.style.width='100%';
+    b.onclick=async()=>{if(!nm.value.trim()||!(ph.value.trim()||wa.value.trim())){msg.className='msg err';msg.textContent='اكتب الاسم ورقم تليفون أو واتساب.';return}b.disabled=true;msg.className='msg';msg.textContent='جاري الإرسال…';
+      try{await addDoc(collection(db,'referrals'),{uid:u.uid,referrer:u.displayName||u.email,name:nm.value.trim(),phone:ph.value.trim(),whatsapp:wa.value.trim(),status:'جديد',at:Date.now()});nm.value=ph.value=wa.value='';msg.className='msg ok';msg.textContent='اتبعت الترشيح ✓ شكراً ليك.'}catch(e){msg.className='msg err';msg.textContent='ما اتبعتش، جرب تاني.'}b.disabled=false};
+    c.appendChild(b)}
+  c.appendChild(msg);app.appendChild(c);
+}
+
 /* ---------- الإيميل ما اتفعلش (للمشرف) ---------- */
 function verifyView(u){
   clear();header('تفعيل إيميل المشرف',u.email);
@@ -591,12 +832,14 @@ function verifyView(u){
 }
 
 async function route(u){
+  if(location.hash==='#jobs'){setShell(null);shell.className='shell auth pub';return jobsPublic(u)}
   if(!u){setShell(null);return authView()}
   const isA=(u.email||'').toLowerCase()===ADMIN;
   try{const sd=await getDoc(doc(db,'users',u.uid));ME=sd.exists()?sd.data():{}}catch(e){ME={}}
   if(isA&&!u.emailVerified){setShell(u,'verify');return verifyView(u)}
   setShell(u,isA?'admin':'rep');
   return isA?adminView(u):repView(u)}
+window.addEventListener('hashchange',()=>route(auth.currentUser));
 onAuthStateChanged(auth,u=>{if(!registering)route(u)});
 </script>
 </body>
