@@ -297,12 +297,15 @@ async function accountView(uid,name,back){
 }
 
 /* ---------- شاشة المندوب ---------- */
-async function repView(u){
+async function repView(u,dt){
   clear();setActive('today');
-  const rid=u.uid+'_'+today,ref=doc(db,'records',rid);let rec={};
+  const todayStr=today,date=dt||todayStr,ms=todayStr.slice(0,8)+'01';
+  const rid=u.uid+'_'+date,ref=doc(db,'records',rid);let rec={};
   try{const sn=await getDoc(ref);if(sn.exists())rec=sn.data()}catch(e){}
+  const recorded=new Set();
+  try{const sn=await getDocs(query(collection(db,'records'),where('uid','==',u.uid)));sn.docs.forEach(x=>{const v=x.data();if(v.status||v.idle)recorded.add(v.date)})}catch(e){}
   const d={work:rec.idle?'idle':(rec.status==='present'?(rec.cycle||''):(rec.status||'')),absentReason:rec.absentReason||'',absentPhoto:null,
-    tomorrow:rec.tomorrow||'',tomReason:rec.tomorrowReason||'',tomPhoto:null,wantAdv:rec.advance>0,adv:rec.advance>0?rec.advance:'',
+    tomorrow:rec.tomorrow||'',tomReason:rec.tomorrowReason||'',tomPhoto:null,wantAdv:rec.advance>0?true:(rec.submittedAt?false:null),adv:rec.advance>0?rec.advance:'',
     ended:!!rec.ended,endPhoto:null,mentor:rec.mentor};
   const msg=el('div','msg');let sb=null;
   function reasonBox(key,ph){const t=document.createElement('textarea');t.placeholder=ph;t.value=d[key];t.rows=3;t.style.cssText=SELCSS+';margin-top:8px;resize:vertical';t.oninput=()=>{d[key]=t.value};return t}
@@ -317,7 +320,15 @@ async function repView(u){
   function ask(card,t){const q=el('div','sub',t);q.style.marginTop='10px';card.appendChild(q)}
   function draw(){
     app.textContent='';
-    header('أهلاً '+(u.displayName||''),'تسجيل يوم '+today+(rec.submittedAt?' · آخر إرسال '+new Date(rec.submittedAt).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):''));
+    header('أهلاً '+(u.displayName||''),'تسجيل يوم '+date+(rec.submittedAt?' · آخر إرسال '+new Date(rec.submittedAt).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):''));
+    const pc=el('div','card');pc.appendChild(el('h2','','اليوم اللي بتسجله'));
+    const di=el('input');di.type='date';di.min=ms;di.max=todayStr;di.value=date;di.style.cssText+=';max-width:220px;margin:0 8px 0 0;display:inline-block';
+    di.onchange=()=>{if(di.value&&di.value>=ms&&di.value<=todayStr)repView(u,di.value)};pc.appendChild(di);
+    if(date!==todayStr){const bt=el('button','sm','↩ ارجع لليوم');bt.onclick=()=>repView(u);pc.appendChild(bt)}
+    const miss=daysBetween(ms,addDays(todayStr,-1)).filter(x=>!recorded.has(x));
+    if(miss.length){const nt=el('div','note','أيام الشهر اللي ماسجلتهاش (اضغط على اليوم عشان تسجله):');nt.style.marginTop='8px';pc.appendChild(nt);
+      const ch=el('div','tabs');miss.forEach(x=>{const b=el('button','sm'+(x===date?' sel':''),x.slice(8));b.title=x;b.onclick=()=>repView(u,x);ch.appendChild(b)});pc.appendChild(ch)}
+    app.appendChild(pc);
     if(!ME.tid){const tc=el('div','card');tc.appendChild(el('h2','','الـ TID بتاعك'));tc.appendChild(el('div','note','محتاجينه عشان نربط حضورك بالشيت.'));
       const ti=el('input');ti.placeholder='TID';ti.dir='ltr';ti.style.marginTop='8px';const tb=el('button','pri','حفظ');tb.style.width='100%';
       tb.onclick=async()=>{const x=ti.value.trim().toUpperCase();if(!x)return;try{await updateDoc(doc(db,'users',u.uid),{tid:x});ME.tid=x;draw()}catch(e){alert('ما اتحفظش')}};
@@ -327,10 +338,12 @@ async function repView(u){
     pick(q1,CYCLES.map(c=>[c,'اشتغلت سيكل '+c]).concat([['idle','أيدل (حضرت ومفيش شغل)'],['absent','غايب'],['off','إجازة']]),'work',d.work);
     if(d.work==='absent'){ask(q1,'إيه سبب الغياب؟');q1.appendChild(reasonBox('absentReason','اكتب السبب…'));q1.appendChild(photoBox('absentPhoto','photoAbsent','أرفق صورة (لو السبب ينفع يتصور)'))}
     app.appendChild(q1);
+    if(date===todayStr){
     const q2=el('div','card');q2.appendChild(el('h2','','هتيجي بكرا؟'));
     pick(q2,[['yes','أيوه جاي'],['no','لأ مش جاي']],'tomorrow',d.tomorrow);
     if(d.tomorrow==='no'){ask(q2,'إيه السبب؟');q2.appendChild(reasonBox('tomReason','اكتب السبب…'));q2.appendChild(photoBox('tomPhoto','photoTomorrow','أرفق صورة (لو السبب ينفع يتصور)'))}
     app.appendChild(q2);
+    }
     const q3=el('div','card');q3.appendChild(el('h2','','سلفة'));const yn=el('div','row');
     [[false,'مش محتاج سلفة'],[true,'محتاج سلفة']].forEach(o=>{const b=el('button',d.wantAdv===o[0]?'sel':'',o[1]);b.onclick=()=>{d.wantAdv=o[0];draw()};yn.appendChild(b)});q3.appendChild(yn);
     if(d.wantAdv){const i=el('input');i.type='number';i.min='1';i.placeholder='المبلغ المطلوب';i.style.marginTop='8px';i.value=d.adv;i.oninput=()=>{d.adv=i.value};q3.appendChild(i);
@@ -350,24 +363,24 @@ async function repView(u){
     msg.className='msg err';
     if(!d.work){msg.textContent='اختار حالتك النهاردة.';return}
     if(d.work==='absent'&&!d.absentReason.trim()){msg.textContent='اكتب سبب الغياب.';return}
-    if(d.tomorrow==='no'&&!d.tomReason.trim()){msg.textContent='اكتب سبب إنك مش جاي بكرا.';return}
+    if(date===todayStr&&d.tomorrow==='no'&&!d.tomReason.trim()){msg.textContent='اكتب سبب إنك مش جاي بكرا.';return}
     if(d.wantAdv&&!(parseFloat(d.adv)>0)){msg.textContent='اكتب مبلغ السلفة.';return}
     if(CYCLES.includes(d.work)&&d.ended&&!d.endPhoto&&!rec.photoEnd){msg.textContent='لازم ترفع سكرين شوت إنهاء العمل.';return}
-    const p={uid:u.uid,name:u.displayName||u.email,email:u.email,date:today,submittedAt:Date.now()};
+    const p={uid:u.uid,name:u.displayName||u.email,email:u.email,date:date,submittedAt:Date.now()};
     if(d.work==='idle'){p.status='present';p.idle=true;p.cycle=null}
     else if(CYCLES.includes(d.work)){p.status='present';p.idle=false;p.cycle=d.work}
     else{p.status=d.work;p.idle=false;p.cycle=null}
     p.absentReason=d.work==='absent'?d.absentReason.trim():'';
-    if(d.tomorrow)p.tomorrow=d.tomorrow;
-    p.tomorrowReason=d.tomorrow==='no'?d.tomReason.trim():'';
+    if(date===todayStr){if(d.tomorrow)p.tomorrow=d.tomorrow;p.tomorrowReason=d.tomorrow==='no'?d.tomReason.trim():''}
+    p.backfilled=date!==todayStr;
     const adv=d.wantAdv?parseFloat(d.adv):0;p.advance=adv;if(adv>0&&adv!==rec.advance)p.advanceStatus='pending';
     const wk=CYCLES.includes(d.work);p.ended=wk?d.ended:false;if(wk){if(d.mentor!==undefined)p.mentor=d.mentor}else p.mentor=false;
     msg.className='msg';msg.textContent='جاري الإرسال…';sb.disabled=true;
     try{
       for(const f of [['absent','absentPhoto'],['tomorrow','tomPhoto'],['end','endPhoto']]){
-        if(d[f[1]]){await setDoc(doc(db,'attachments',rid+'_'+f[0]),{uid:u.uid,date:today,kind:f[0],data:d[f[1]],at:Date.now()});p['photo'+f[0].charAt(0).toUpperCase()+f[0].slice(1)]=true;d[f[1]]=null}}
+        if(d[f[1]]){await setDoc(doc(db,'attachments',rid+'_'+f[0]),{uid:u.uid,date:date,kind:f[0],data:d[f[1]],at:Date.now()});p['photo'+f[0].charAt(0).toUpperCase()+f[0].slice(1)]=true;d[f[1]]=null}}
       await setDoc(ref,p,{merge:true});Object.assign(rec,p);
-      draw();msg.className='msg ok';msg.textContent='اتحفظ ✓ تم الإرسال، وتقدر تعدّل وتبعت تاني.';
+      recorded.add(date);draw();msg.className='msg ok';msg.textContent='اتحفظ ✓ تم الإرسال، وتقدر تعدّل وتبعت تاني.'+(date===todayStr&&!d.tomorrow?' بس لسه ماجاوبتش على "هتيجي بكرا؟".':'');
     }catch(e){msg.className='msg err';msg.textContent='ما اتبعتش، جرب تاني ('+(e.code||'')+')';sb.disabled=false}
   }
   draw();
@@ -451,6 +464,7 @@ function adminView(u){
       if(r.status==='absent'&&(r.absentReason||r.photoAbsent))line('غياب: '+(r.absentReason||''),'photoAbsent','absent');
       if(r.tomorrow==='no')line('مش جاي بكرا: '+(r.tomorrowReason||''),'photoTomorrow','tomorrow');
       if(r.photoEnd)line('سكرين إنهاء العمل','photoEnd','end');
+      if(r.backfilled)nt.appendChild(el('div','note','📅 اتسجل بأثر رجعي'));
       if(!nt.childNodes.length)nt.textContent='—';
       tr.appendChild(nt);
       t.appendChild(tr)});
@@ -494,7 +508,7 @@ const norm=t=>String(t==null?'':t).toLowerCase().replace(/[\u064B-\u065F\u0640]/
 const pct=(x,y)=>y?Math.round(x*1000/y)/10:0;
 function addDays(d,n){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return iso(x)}
 function daysBetween(a,b){const r=[];for(let d=a;d<=b&&r.length<400;d=addDays(d,1))r.push(d);return r}
-function weekStart(d){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()-((x.getDay()+1)%7));return iso(x)}
+function weekStart(d){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()-x.getDay());return iso(x)}
 function catOf(r){if(!r)return 'none';if(r.idle)return 'idle';return r.status==='present'?'present':r.status==='absent'?'absent':r.status==='off'?'off':'none'}
 function csvSave(name,rows){const body=rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+body],{type:'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
