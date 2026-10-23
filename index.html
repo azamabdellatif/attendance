@@ -180,10 +180,10 @@ function statCard(lbl,val){
 
 
 /* ---------- المحطات والصور ---------- */
-const STATIONS=['DAi3','DAi4','DRO5','DAi7'];
+const STATIONS=['DAI3','DAI4','DRO5','DAI7'];
 const SELCSS='width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit;margin-bottom:8px';
 let ME={},topAv=null;
-function stOf(v){return v&&STATIONS.includes(v.station)?v.station:'غير محدد'}
+function stOf(v){const x=v&&String(v.station||'').trim().toUpperCase();return STATIONS.includes(x)?x:'غير محدد'}
 function avatarEl(photo,name,sz){const a=el('div','avatar');if(sz){a.style.width=a.style.height=sz+'px';a.style.fontSize=Math.round(sz/2.4)+'px'}
   if(photo){const i=document.createElement('img');i.src=photo;i.alt='';a.appendChild(i)}else a.textContent=String(name||'?').trim().charAt(0).toUpperCase();return a}
 function pickPhoto(){return new Promise(res=>{const i=document.createElement('input');i.type='file';i.accept='image/*';
@@ -226,9 +226,9 @@ function authView(mode){
   clear();mode=mode||'login';
   app.appendChild(el('h1','','حضور المناديب'));
   app.appendChild(el('div','sub',mode==='login'?'سجل دخول بإيميلك':'اعمل حساب جديد بإيميلك'));
-  const c=el('div','card'),name=el('input'),em=el('input'),pw=el('input'),msg=el('div','msg err'),stSel=stSelect('',false),ph=el('input');ph.type='tel';ph.placeholder='رقم الواتساب (اختياري)';ph.dir='ltr';
+  const c=el('div','card'),name=el('input'),em=el('input'),pw=el('input'),msg=el('div','msg err'),stSel=stSelect('',false),ph=el('input'),tidI=el('input');tidI.placeholder='رقم الـ TID بتاعك (Transporter ID)';tidI.dir='ltr';ph.type='tel';ph.placeholder='رقم الواتساب (اختياري)';ph.dir='ltr';
   name.placeholder='الاسم بالكامل';em.type='email';em.placeholder='الإيميل (Gmail أو Outlook أو أي إيميل)';em.dir='ltr';pw.type='password';pw.placeholder='الباسورد (6 على الأقل)';pw.dir='ltr';
-  if(mode==='register'){c.appendChild(name);c.appendChild(stSel);c.appendChild(ph)}c.appendChild(em);c.appendChild(pw);
+  if(mode==='register'){c.appendChild(name);c.appendChild(stSel);c.appendChild(tidI);c.appendChild(ph)}c.appendChild(em);c.appendChild(pw);
   const go=el('button','pri',mode==='login'?'دخول':'إنشاء حساب');
   go.onclick=async()=>{
     msg.textContent='';go.disabled=true;
@@ -237,10 +237,11 @@ function authView(mode){
       else{
         if(!name.value.trim()){msg.textContent='اكتب اسمك';go.disabled=false;return}
         if(!stSel.value){msg.textContent='اختار محطتك';go.disabled=false;return}
+        if(!tidI.value.trim()){msg.textContent='اكتب الـ TID بتاعك';go.disabled=false;return}
         registering=true;
         const r=await createUserWithEmailAndPassword(auth,em.value.trim(),pw.value);
         await updateProfile(r.user,{displayName:name.value.trim()});
-        await setDoc(doc(db,'users',r.user.uid),{name:name.value.trim(),email:r.user.email,station:stSel.value,phone:ph.value.trim()});
+        await setDoc(doc(db,'users',r.user.uid),{name:name.value.trim(),email:r.user.email,station:stSel.value,tid:tidI.value.trim().toUpperCase(),phone:ph.value.trim()});
         try{await sendEmailVerification(r.user)}catch(e){}
         registering=false;route(auth.currentUser);
       }
@@ -317,6 +318,11 @@ async function repView(u){
   function draw(){
     app.textContent='';
     header('أهلاً '+(u.displayName||''),'تسجيل يوم '+today+(rec.submittedAt?' · آخر إرسال '+new Date(rec.submittedAt).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):''));
+    if(!ME.tid){const tc=el('div','card');tc.appendChild(el('h2','','الـ TID بتاعك'));tc.appendChild(el('div','note','محتاجينه عشان نربط حضورك بالشيت.'));
+      const ti=el('input');ti.placeholder='TID';ti.dir='ltr';ti.style.marginTop='8px';const tb=el('button','pri','حفظ');tb.style.width='100%';
+      tb.onclick=async()=>{const x=ti.value.trim().toUpperCase();if(!x)return;try{await updateDoc(doc(db,'users',u.uid),{tid:x});ME.tid=x;draw()}catch(e){alert('ما اتحفظش')}};
+      tc.appendChild(ti);tc.appendChild(tb);app.appendChild(tc)}
+    if(rec.status==='present'&&!rec.idle&&!rec.cycle){const nc=el('div','card','سجلت حضورك قبل كده من غير سيكل. اختار سيكلك من تحت واضغط إرسال.');nc.style.borderColor='var(--warn)';app.appendChild(nc)}
     const q1=el('div','card');q1.appendChild(el('h2','','حالتك النهاردة'));
     pick(q1,CYCLES.map(c=>[c,'اشتغلت سيكل '+c]).concat([['idle','أيدل (حضرت ومفيش شغل)'],['absent','غايب'],['off','إجازة']]),'work',d.work);
     if(d.work==='absent'){ask(q1,'إيه سبب الغياب؟');q1.appendChild(reasonBox('absentReason','اكتب السبب…'));q1.appendChild(photoBox('absentPhoto','photoAbsent','أرفق صورة (لو السبب ينفع يتصور)'))}
@@ -399,6 +405,7 @@ function adminView(u){
     rm.appendChild(el('div','note','بتضغط على الزرار فيفتحلك واتساب برسالة جاهزة تبعتها بنفسك.'));
     const lists=[['ماسجلوش حضور النهاردة',ids.filter(k=>{const r=recs[k];return !r||(!r.status&&!r.idle)}),n2=>'صباح الخير '+n2+'\nمن فضلك سجّل حضورك النهاردة على الرابط:\n'+SITE],
       ['اشتغلوا ولسه ماعملوش إنهاء عمل',ids.filter(k=>{const r=recs[k];return r&&r.status==='present'&&!r.idle&&!r.ended}),n2=>'مساء الخير '+n2+'\nمن فضلك سجّل إنهاء العمل وارفع سكرين شوت من الرابط:\n'+SITE]];
+    lists.push(['سجلوا حضور من غير سيكل',ids.filter(k=>{const r=recs[k];return r&&r.status==='present'&&!r.idle&&!r.cycle}),n2=>'صباح الخير '+n2+'\nمن فضلك افتح الرابط واختار السيكل بتاعك وابعت:\n'+SITE]);
     lists.forEach(L=>{const dt=document.createElement('details'),sm=document.createElement('summary');sm.textContent='📲 '+L[0]+' ('+L[1].length+')';dt.appendChild(sm);
       if(!L[1].length)dt.appendChild(el('div','note','مفيش حد.'));
       L[1].forEach(k=>{const v=users[k]||recs[k]||{},w=el('div','wrow');w.appendChild(avatarEl(v.photo,v.name||v.email,26));w.appendChild(el('span','',v.name||v.email));w.appendChild(el('span','note',stK(k)));w.appendChild(el('span','sp'));
@@ -414,7 +421,11 @@ function adminView(u){
     ids.slice().sort((a,b)=>(stK(a)>stK(b)?1:stK(a)<stK(b)?-1:0)).forEach(k=>{const v=users[k]||recs[k],r=recs[k]||{},tr=el('tr');
       const nm=el('td'),w=el('div','nmc'),nb=el('button','link',v.name||v.email);w.appendChild(avatarEl(v.photo,v.name||v.email,28));w.appendChild(nb);nb.onclick=()=>accountView(k,v.name||v.email,()=>adminView(u));nm.appendChild(w);tr.appendChild(nm);
       tr.appendChild(el('td','',stK(k)));
-      tr.appendChild(el('td',r.idle?'warn':r.status==='present'?'ok':r.status==='absent'?'bad':'warn',stLabel(r)));
+      const sc2=el('td',r.idle?'warn':r.status==='present'?'ok':r.status==='absent'?'bad':'warn',stLabel(r));
+      if(r.status==='present'&&!r.idle&&r._id){const cs=document.createElement('select');cs.style.cssText=SELCSS+';width:auto;margin:4px 0 0 0;padding:4px 6px;display:block';
+        [['','سيكل؟']].concat(CYCLES.map(x=>[x,x])).forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];cs.appendChild(op)});cs.value=r.cycle||'';
+        cs.onchange=()=>updateDoc(doc(db,'records',r._id),{cycle:cs.value||null}).catch(()=>alert('ما اتحفظش'));sc2.appendChild(cs)}
+      tr.appendChild(sc2);
       tr.appendChild(el('td',r.tomorrow==='yes'?'ok':r.tomorrow==='no'?'bad':'',r.tomorrow==='yes'?'جاي':r.tomorrow==='no'?'مش جاي':'—'));
       const ad=el('td');
       if(r.advance>0){ad.appendChild(el('span',r.advanceStatus==='approved'?'ok':r.advanceStatus==='rejected'?'bad':'warn',r.advance+' '));
@@ -462,11 +473,11 @@ function repsView(u){
     const c=el('div','card rrow');if(v.active===false)c.style.opacity='.55';c.appendChild(avatarEl(v.photo,v.name||v.email,46));
     const mid=el('div','rmid'),nb=el('button','link',v.name||v.email);nb.onclick=()=>accountView(k,v.name||v.email,()=>repsView(u));mid.appendChild(nb);
     mid.appendChild(el('div','sub',(v.email||'')+(v.phone?' · 📞 '+v.phone:'')+(v.tid?' · TID: '+v.tid:'')+(v.active===false?' · موقوف':'')));c.appendChild(mid);
-    const act=el('div','ract'),sel=stSelect(STATIONS.includes(v.station)?v.station:'',false);sel.onchange=()=>updateDoc(doc(db,'users',k),{station:sel.value}).catch(fail);act.appendChild(sel);
+    const act=el('div','ract'),sel=stSelect(stOf(v)==='غير محدد'?'':stOf(v),false);sel.onchange=()=>updateDoc(doc(db,'users',k),{station:sel.value}).catch(fail);act.appendChild(sel);
     const b1=el('button','sm','✎ الاسم');b1.onclick=()=>{const n=prompt('اسم المندوب:',v.name||'');if(n&&n.trim())updateDoc(doc(db,'users',k),{name:n.trim()}).catch(fail)};act.appendChild(b1);
     const b2=el('button','sm','📷 صورة');b2.onclick=async()=>{const d=await pickPhoto();if(d)updateDoc(doc(db,'users',k),{photo:d}).catch(fail)};act.appendChild(b2);
     const b4=el('button','sm','📞 الرقم');b4.onclick=()=>{const n=prompt('رقم الواتساب (مثال 01012345678):',v.phone||'');if(n!==null)updateDoc(doc(db,'users',k),{phone:n.trim()}).catch(fail)};act.appendChild(b4);
-    const b5=el('button','sm','🆔 TID');b5.onclick=()=>{const n=prompt('الـ TID (Transporter ID):',v.tid||'');if(n!==null)updateDoc(doc(db,'users',k),{tid:n.trim()}).catch(fail)};act.appendChild(b5);
+    const b5=el('button','sm','🆔 TID');b5.onclick=()=>{const n=prompt('الـ TID (Transporter ID):',v.tid||'');if(n!==null)updateDoc(doc(db,'users',k),{tid:n.trim().toUpperCase()}).catch(fail)};act.appendChild(b5);
     const b3=el('button','sm',v.active===false?'تفعيل':'إيقاف');b3.onclick=()=>updateDoc(doc(db,'users',k),{active:v.active===false}).catch(fail);act.appendChild(b3);
     c.appendChild(act);return c}
   function draw(){
@@ -592,6 +603,15 @@ function offDays(v){const set=new Set();
     if(WD[t]!==undefined)set.add(WD[t])});
   return set}
 
+async function readSheets(file){
+  const out=[];
+  if(/\.csv$/i.test(file.name))out.push({name:'CSV',start:0,arr:parseCsv(new TextDecoder('utf-8').decode(await file.arrayBuffer()))});
+  else{
+    try{await loadXlsx()}catch(e){throw new Error('مقدرتش أحمّل مكتبة Excel. نزّل التاب كـ CSV وارفعه.')}
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    wb.SheetNames.forEach(n=>{const ws=wb.Sheets[n];if(!ws||!ws['!ref'])return;out.push({name:n,start:XLSX.utils.decode_range(ws['!ref']).s.r,arr:XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''})})})}
+  return out.map(x=>({name:x.name,start:x.start,arr:x.arr,h:x.arr.findIndex(r=>r.some(c=>{const n=norm(c);return n==='tid'||n.includes('transporter')}))})).filter(x=>x.h>=0)}
+
 function compareView(u){
   clear();setActive('cmp');header('مقارنة مع ملف Excel','قارن أيام حضور وإجازة كل مندوب في الشيت بحضوره الفعلي في السيستم');backBtn(u);
   const info=el('div','card');
@@ -599,7 +619,7 @@ function compareView(u){
   const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv';info.appendChild(fi);
   const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
   const cfg=el('div'),out=el('div');app.appendChild(cfg);app.appendChild(out);
-  let sheet=null,sN,sE,sC,sO,pf,pt;
+  let sheet=null,sN,sE,sT,sC,sO,pf,pt;
   fi.onchange=async()=>{
     const file=fi.files[0];if(!file)return;msg.textContent='جاري قراءة الملف…';cfg.textContent='';out.textContent='';
     try{sheet=await readSheet(file)}catch(e){msg.textContent=e.message||'مقدرتش أقرأ الملف';return}
@@ -615,6 +635,7 @@ function compareView(u){
     if(ci<0)ci=find(['ايام','days','عدد']);
     sN=sel('عمود اسم المندوب',find(['اسم','name','مندوب']));
     sE=sel('عمود الإيميل (لو موجود)',find(['mail','ايميل','بريد']));
+    sT=sel('عمود TID (لو موجود)',find(['tid']));
     sC=sel('عمود عدد أيام الحضور في الشيت',ci);
     sO=sel('عمود يوم الإجازة في الشيت',find(['اجازه','راحه','off']));
     c.appendChild(el('div','sub','اختار الأسبوع اللي الشيت بتاعه:'));
@@ -623,20 +644,20 @@ function compareView(u){
     [['الأسبوع ده',w0,addDays(w0,6)],['الأسبوع اللي فات',addDays(w0,-7),addDays(w0,-1)]].forEach(x=>{const b=el('button','sm',x[0]);b.onclick=()=>{pf.value=x[1];pt.value=x[2]};q.appendChild(b)});c.appendChild(q);
     const go=el('button','pri','قارن');go.style.cssText+='width:100%;margin-top:10px';go.onclick=run;c.appendChild(go);cfg.appendChild(c)}
   async function run(){
-    const ni=+sN.value,ei=+sE.value,ci=+sC.value,oi=+sO.value;
-    if(ni<0&&ei<0){out.textContent='اختار عمود الاسم أو الإيميل.';return}
+    const ni=+sN.value,ei=+sE.value,ti=+sT.value,ci=+sC.value,oi=+sO.value;
+    if(ni<0&&ei<0&&ti<0){out.textContent='اختار عمود الاسم أو الإيميل أو TID.';return}
     if(ci<0&&oi<0){out.textContent='اختار عمود عدد الأيام أو عمود يوم الإجازة.';return}
     if(!pf.value||!pt.value||pf.value>pt.value){out.textContent='اختار فترة صحيحة.';return}
     out.textContent='جاري المقارنة…';
     const from=pf.value,to=pt.value,dates=daysBetween(from,to);let data;
     try{data=await loadPeriod(from,to)}catch(e){out.textContent='مقدرتش أقرأ البيانات: '+(e.code||'');return}
-    const byE={},byN={};
-    Object.keys(data.users).forEach(id=>{const v=data.users[id];if(v.email)byE[v.email.toLowerCase()]=id;const k=norm(v.name);if(k)byN[k]=(byN[k]===undefined?id:null)});
+    const byE={},byN={},byT={};
+    Object.keys(data.users).forEach(id=>{const v=data.users[id];if(v.tid)byT[String(v.tid).trim().toUpperCase()]=id;if(v.email)byE[v.email.toLowerCase()]=id;const k=norm(v.name);if(k)byN[k]=(byN[k]===undefined?id:null)});
     const rows=[],unm=new Set(),seen=new Set();let noNum=0,noOff=0,dup=0;
     sheet.rows.forEach(r=>{
-      const nm=ni>=0?String(r[ni]==null?'':r[ni]).trim():'',em=ei>=0?String(r[ei]==null?'':r[ei]).trim().toLowerCase():'';if(!nm&&!em)return;
-      const uid=(em&&byE[em])||(nm&&byN[norm(nm)])||null;
-      if(!uid){unm.add(nm||em);return}
+      const nm=ni>=0?String(r[ni]==null?'':r[ni]).trim():'',em=ei>=0?String(r[ei]==null?'':r[ei]).trim().toLowerCase():'';const tid=ti>=0?String(r[ti]==null?'':r[ti]).trim().toUpperCase():'';if(!nm&&!em&&!tid)return;
+      const uid=(tid&&byT[tid])||(em&&byE[em])||(nm&&byN[norm(nm)])||null;
+      if(!uid){unm.add(nm||em||tid);return}
       if(seen.has(uid)){dup++;return}seen.add(uid);
       const planned=ci>=0?numFrom(r[ci]):null;if(ci>=0&&planned==null)noNum++;
       const off=oi>=0?offDays(r[oi]):new Set();if(oi>=0&&!off.size&&String(r[oi]==null?'':r[oi]).trim()!=='')noOff++;
@@ -649,7 +670,7 @@ function compareView(u){
         pc:expect?pct(att,expect):(att?100:0),st:diff===0?'مطابق':diff<0?'ناقص '+(-diff):'زيادة '+diff})});
     out.textContent='';
     if(unm.size||noNum||noOff||dup){const w=el('div','card');w.style.borderColor='var(--warn)';
-      if(unm.size)w.appendChild(el('div','',unm.size+' من الشيت ملقيتهمش في السيستم (لازم يعملوا حساب بنفس الاسم أو الإيميل)، ومش محسوبين: '+Array.from(unm).slice(0,15).join('، ')+(unm.size>15?' …':'')));
+      if(unm.size)w.appendChild(el('div','',unm.size+' من الشيت ملقيتهمش في السيستم (لازم يكونوا عاملين حساب وكاتبين نفس الـ TID)، ومش محسوبين: '+Array.from(unm).slice(0,15).join('، ')+(unm.size>15?' …':'')));
       if(noNum)w.appendChild(el('div','msg',noNum+' مندوب عدد أيامه في الشيت مش رقم، واتحسبله (أيام الأسبوع ناقص أيام الإجازة).'));
       if(noOff)w.appendChild(el('div','msg',noOff+' مندوب يوم إجازته مش مفهوم (المفروض اسم يوم زي الجمعة أو تاريخ).'));
       if(dup)w.appendChild(el('div','msg',dup+' صف مكرر لنفس المندوب واتتجاهل.'));out.appendChild(w)}
@@ -712,6 +733,40 @@ function exportView(u){
     dl.onclick=()=>csvSave('حالة-بكرا-'+addDays(today,1)+'.csv',[['TID','المندوب','المحطة','الحالة']].concat(rows));
     row.appendChild(cp);row.appendChild(dl);out2.appendChild(row)};
   c2.appendChild(b2);c2.appendChild(out2);app.appendChild(c2);
+
+  const c4=el('div','card');c4.appendChild(el('h2','','تعبئة عمود Present في الشيت'));
+  c4.appendChild(el('p','note','نزّل الشيت من جوجل (File ثم Download ثم Excel، أو CSV للتاب) وارفعه هنا. السيستم بيملا خانات Present الفاضية بس، بحسب الـ TID، من إجابات "هتيجي بكرا؟" النهاردة: جاي = Present، مش جاي = Absent، ما ردش أو مش مسجل = Unreachable. وإنت تنسخ العمود وتلصقه في الشيت.'));
+  const fi4=el('input');fi4.type='file';fi4.accept='.xlsx,.xls,.csv';c4.appendChild(fi4);
+  const tabSel=document.createElement('select');tabSel.style.cssText=SELCSS;tabSel.style.display='none';c4.appendChild(tabSel);
+  const go4=el('button','pri','جهّز عمود Present');go4.style.cssText+='width:100%;display:none';c4.appendChild(go4);
+  const m4=el('div','msg'),out4=el('div');c4.appendChild(m4);c4.appendChild(out4);app.appendChild(c4);let tabs=[];
+  fi4.onchange=async()=>{const file=fi4.files[0];if(!file)return;m4.textContent='جاري قراءة الملف…';out4.textContent='';tabSel.style.display=go4.style.display='none';
+    try{tabs=await readSheets(file)}catch(e){m4.textContent=e.message||'مقدرتش أقرأ الملف';return}
+    if(!tabs.length){m4.textContent='مفيش تاب فيه عمود TID.';return}
+    tabSel.textContent='';tabs.forEach((x,i)=>{const o=document.createElement('option');o.value=i;o.textContent=x.name;tabSel.appendChild(o)});
+    tabSel.style.display=go4.style.display=tabs.length>1?'block':'none';if(tabs.length===1)go4.style.display='block';m4.textContent='لقيت '+tabs.length+' تاب فيه TID. اختار التاب واضغط جهّز.'};
+  go4.onclick=async()=>{
+    const t=tabs[+tabSel.value||0],hd=t.arr[t.h].map(x=>norm(x));
+    const ti=hd.findIndex(x=>x==='tid'||x.includes('transporter')),pi=hd.findIndex(x=>x==='present'),ni=hd.findIndex(x=>x.includes('name'));
+    if(pi<0){m4.textContent='مش لاقي عمود Present في التاب ده.';return}
+    m4.textContent='جاري التجهيز…';let data;try{data=await loadPeriod(today,today)}catch(e){m4.textContent='مقدرتش أقرأ البيانات';return}
+    const byT={};Object.keys(data.users).forEach(id=>{const v=data.users[id];if(v.tid)byT[String(v.tid).trim().toUpperCase()]=id});
+    let body=t.arr.slice(t.h+1),last=body.length;while(last>0&&!body[last-1].some(c=>String(c).trim()!==''))last--;body=body.slice(0,last);
+    const cnt={Present:0,Absent:0,Unreachable:0,kept:0,noTid:0},res=[];
+    const fill=body.map(r=>{const tid=String(r[ti]==null?'':r[ti]).trim().toUpperCase(),ex=String(r[pi]==null?'':r[pi]).trim();
+      if(ex){cnt.kept++;return ex}if(!tid){cnt.noTid++;return ''}
+      const uid=byT[tid],rc=uid&&data.recs[uid+'_'+today],v=rc&&rc.tomorrow==='yes'?'Present':rc&&rc.tomorrow==='no'?'Absent':'Unreachable';
+      cnt[v]++;res.push([tid,ni>=0?r[ni]:'',v,uid?'':'مش مسجل في السيستم']);return v});
+    out4.textContent='';m4.textContent='';
+    out4.appendChild(el('div','band','اتملا: Present '+cnt.Present+' · Absent '+cnt.Absent+' · Unreachable '+cnt.Unreachable+' — مكتوب قبل كده (اتسابوا زي ما هما): '+cnt.kept+(cnt.noTid?' — صفوف من غير TID: '+cnt.noTid:'')));
+    const rowNo=t.start+t.h+2;
+    out4.appendChild(el('div','note','الصق العمود في خانة Present بداية من الصف رقم '+rowNo+' (أول صف بيانات). الصفوف اللي كانت مكتوبة قبل كده بتتلصق بنفس قيمتها.'));
+    const row=el('div','row');row.style.margin='8px 0';
+    const cp=el('button','pri','📋 انسخ عمود Present'),dl=el('button','','⬇ تنزيل CSV (TID + المندوب + الحالة)');
+    cp.onclick=()=>navigator.clipboard.writeText(fill.join('\n')).then(()=>alert('اتنسخ ✓ الصقه في عمود Present بداية من الصف '+rowNo),()=>alert('المتصفح منع النسخ، استخدم التنزيل'));
+    dl.onclick=()=>csvSave('present-'+addDays(today,1)+'.csv',[['TID','DA Name','Present','ملاحظة']].concat(res));
+    row.appendChild(cp);row.appendChild(dl);out4.appendChild(row);
+    tableCard(out4,'الخانات اللي اتملت ('+res.length+')',['TID','الاسم','Present','ملاحظة'],res.slice(0,300))};
 
   const c3=el('div','card');c3.appendChild(el('h2','','مسح الصور القديمة'));
   c3.appendChild(el('p','note','بتمسح صور الغياب وسكرينات إنهاء العمل الأقدم من عدد الأيام اللي تحدده، عشان المساحة المجانية. تقدر كمان تمسح صورة واحدة من 📎 جنب المندوب في اللوحة.'));
