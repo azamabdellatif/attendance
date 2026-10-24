@@ -226,11 +226,11 @@ async function loadPricing(){
   const nn=x=>(x===''||x==null||isNaN(parseFloat(x)))?null:parseFloat(x);
   try{const sn=await getDoc(doc(db,'settings','pricing'));if(sn.exists()){const v=sn.data();
     return {zones:(v.zones||[]).map(z=>({name:z.name,sedan:nn(z.sedan!=null?z.sedan:z.price),van:nn(z.van),idleSedan:nn(z.idleSedan!=null?z.idleSedan:z.idle),idleVan:nn(z.idleVan)})),
-      idleSedan:nn(v.idleSedan!=null?v.idleSedan:v.idle)||0,idleVan:nn(v.idleVan)||0}}}catch(e){}
-  return {zones:[],idleSedan:0,idleVan:0}}
+      idleSedan:nn(v.idleSedan!=null?v.idleSedan:v.idle)||0,idleVan:nn(v.idleVan)||0,daySedan:nn(v.daySedan),dayVan:nn(v.dayVan)}}}catch(e){}
+  return {zones:[],idleSedan:0,idleVan:0,daySedan:null,dayVan:null}}
 function zoneInfo(P,name,veh){const n=norm(name),z=(P.zones||[]).find(x=>norm(x.name)===n),van=veh==='فان',gI=van?P.idleVan:P.idleSedan;
   if(!z)return {found:false,price:0,idle:gI||0};
-  const pr=van?z.van:z.sedan,id=van?z.idleVan:z.idleSedan;
+  const pr=(van?z.van:z.sedan)!=null?(van?z.van:z.sedan):(van?P.dayVan:P.daySedan),id=van?z.idleVan:z.idleSedan;
   return {found:pr!=null,price:pr||0,idle:id!=null?id:(gI||0)}}
 function money(x){return (Math.round(x*100)/100).toLocaleString('en-US')+' ج'}
 
@@ -936,27 +936,27 @@ function suggestView(u,tab){
 /* ---------- المناطق والتسعير (للمشرف) ---------- */
 function pricingView(u){
   clear();setActive('pricing');header('المناطق والتسعير','سعر اليوم لكل منطقة حسب نوع العربية (سيدان أو فان)، وسعر اليوم الأيدل');
-  let P={zones:[],idleSedan:'',idleVan:''};const box=el('div'),msg=el('div','msg');app.appendChild(box);
+  let P={zones:[],idleSedan:'',idleVan:'',daySedan:'',dayVan:''};const box=el('div'),msg=el('div','msg');app.appendChild(box);
   getDoc(doc(db,'settings','pricing')).then(sn=>{if(sn.exists()){const v=sn.data();
-    P.idleSedan=v.idleSedan!=null?v.idleSedan:(v.idle!=null?v.idle:'');P.idleVan=v.idleVan!=null?v.idleVan:'';
+    P.idleSedan=v.idleSedan!=null?v.idleSedan:(v.idle!=null?v.idle:'');P.idleVan=v.idleVan!=null?v.idleVan:'';P.daySedan=v.daySedan!=null?v.daySedan:'';P.dayVan=v.dayVan!=null?v.dayVan:'';
     P.zones=(v.zones||[]).map(z=>({name:z.name||'',sedan:z.sedan!=null?z.sedan:(z.price!=null?z.price:''),van:z.van!=null?z.van:'',idleSedan:z.idleSedan!=null?z.idleSedan:(z.idle!=null?z.idle:''),idleVan:z.idleVan!=null?z.idleVan:''}))}}).catch(()=>{}).then(draw);
   const num=x=>{const n=parseFloat(x);return isNaN(n)?'':n};
   function draw(){
-    box.textContent='';const c=el('div','card');c.appendChild(el('h2','','سعر اليوم الأيدل الافتراضي'));
-    c.appendChild(el('div','note','بيتطبق على أي منطقة مالهاش سعر أيدل خاص.'));
+    box.textContent='';const c=el('div','card');c.appendChild(el('h2','','الأسعار الافتراضية (سعر اليوم وسعر الأيدل)'));
+    c.appendChild(el('div','note','بتتطبق على أي منطقة سايب خانة السعر بتاعتها فاضية. ولو منطقة ليها سعر خاص، سعرها هو اللي بيمشي.'));
     const gr=el('div','jrow');gr.style.marginTop='8px';
-    [['idleSedan','أيدل سيدان (ج)'],['idleVan','أيدل فان (ج)']].forEach(f=>{const x=el('input');x.type='number';x.min='0';x.placeholder=f[1];x.value=P[f[0]];x.oninput=()=>{P[f[0]]=x.value};gr.appendChild(x)});c.appendChild(gr);box.appendChild(c);
+    [['daySedan','سعر اليوم سيدان (ج)'],['dayVan','سعر اليوم فان (ج)'],['idleSedan','سعر الأيدل سيدان (ج)'],['idleVan','سعر الأيدل فان (ج)']].forEach(f=>{const x=el('input');x.type='number';x.min='0';x.placeholder=f[1];x.value=P[f[0]];x.oninput=()=>{P[f[0]]=x.value};gr.appendChild(x)});c.appendChild(gr);box.appendChild(c);
     const c2=el('div','card');c2.appendChild(el('h2','','المناطق'));
     P.zones.forEach((z,i)=>{const g=el('div','jrow');
-      [['name','اسم المنطقة','text'],['sedan','سيدان / يوم','number'],['van','فان / يوم','number'],['idleSedan','أيدل سيدان (اختياري)','number'],['idleVan','أيدل فان (اختياري)','number']].forEach(f=>{const x=el('input');x.type=f[2];x.placeholder=f[1];x.value=z[f[0]]==null?'':z[f[0]];x.oninput=()=>{z[f[0]]=x.value};g.appendChild(x)});
+      [['name','اسم المنطقة','text'],['sedan','سعر اليوم سيدان (فاضي = الافتراضي)','number'],['van','سعر اليوم فان (فاضي = الافتراضي)','number'],['idleSedan','أيدل سيدان (فاضي = الافتراضي)','number'],['idleVan','أيدل فان (فاضي = الافتراضي)','number']].forEach(f=>{const x=el('input');x.type=f[2];x.placeholder=f[1];x.value=z[f[0]]==null?'':z[f[0]];x.oninput=()=>{z[f[0]]=x.value};g.appendChild(x)});
       const dl=el('button','sm','🗑 حذف');dl.onclick=()=>{P.zones.splice(i,1);draw()};g.appendChild(dl);c2.appendChild(g)});
     const ad=el('button','','➕ إضافة منطقة');ad.onclick=()=>{P.zones.push({name:'',sedan:'',van:'',idleSedan:'',idleVan:''});draw()};c2.appendChild(ad);box.appendChild(c2);
-    box.appendChild(el('div','note','لو غيّرت سعر منطقة، حساب كل الأيام (القديمة كمان) بيتحسب بالسعر الجديد. خانة الأيدل لو فاضية بتاخد الافتراضي. وسعر فان فاضي معناه إن المنطقة دي مالهاش سعر فان لسه.'));
+    box.appendChild(el('div','note','لو غيّرت سعر منطقة، حساب كل الأيام (القديمة كمان) بيتحسب بالسعر الجديد. أي خانة فاضية بتاخد السعر الافتراضي، ولو مفيش افتراضي كمان بيظهر ⚠️ عند المندوب.'));
     const sv=el('button','pri','حفظ');sv.style.cssText+='width:100%;padding:12px;margin-top:10px';
     sv.onclick=async()=>{const zs=P.zones.map(z=>({name:String(z.name||'').trim(),sedan:num(z.sedan),van:num(z.van),idleSedan:num(z.idleSedan),idleVan:num(z.idleVan)})).filter(z=>z.name);
       const names=zs.map(z=>norm(z.name));if(new Set(names).size!==names.length){msg.className='msg err';msg.textContent='فيه منطقتين بنفس الاسم.';return}
       msg.className='msg';msg.textContent='جاري الحفظ…';
-      try{await setDoc(doc(db,'settings','pricing'),{zones:zs,idleSedan:num(P.idleSedan),idleVan:num(P.idleVan),updatedAt:Date.now()});P.zones=zs;msg.className='msg ok';msg.textContent='اتحفظ ✓';draw()}catch(e){msg.className='msg err';msg.textContent='ما اتحفظش ('+(e.code||'')+')'}};
+      try{await setDoc(doc(db,'settings','pricing'),{zones:zs,idleSedan:num(P.idleSedan),idleVan:num(P.idleVan),daySedan:num(P.daySedan),dayVan:num(P.dayVan),updatedAt:Date.now()});P.zones=zs;msg.className='msg ok';msg.textContent='اتحفظ ✓';draw()}catch(e){msg.className='msg err';msg.textContent='ما اتحفظش ('+(e.code||'')+')'}};
     box.appendChild(sv);box.appendChild(msg);
   }
 }
