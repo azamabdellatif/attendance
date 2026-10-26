@@ -148,7 +148,7 @@ function setShell(u,role){
   shell.className='shell';
   const side=document.getElementById('side'),tb=document.getElementById('topbar');side.textContent='';tb.textContent='';
   const br=el('div','brand');br.appendChild(el('div','logo','📋'));br.appendChild(el('span','','متابعة المناديب'));side.appendChild(br);
-  const items=role==='admin'?[['dash','🏠','لوحة التحكم',()=>adminView(u)],['reps','👥','المناديب والبحث',()=>repsView(u)],['report','📊','تقرير فترة',()=>reportView(u)],['export','📤','سحب الحضور وحالة بكرا',()=>exportView(u)],['cmp','📁','مقارنة بملف Excel',()=>compareView(u)],['inbox','💡','الاقتراحات والترشيحات',()=>inboxView(u)],['pricing','💰','المناطق والتسعير',()=>pricingView(u)],['jobs','🧾','صفحة التوظيف والتسعير',()=>jobsAdminView(u)]]
+  const items=role==='admin'?[['dash','🏠','لوحة التحكم',()=>adminView(u)],['reps','👥','المناديب والبحث',()=>repsView(u)],['report','📊','تقرير فترة',()=>reportView(u)],['export','📤','سحب الحضور وحالة بكرا',()=>exportView(u)],['cmp','📁','مقارنة بملف Excel',()=>compareView(u)],['payroll','💳','مقارنة شيت المرتبات',()=>payrollView(u)],['inbox','💡','الاقتراحات والترشيحات',()=>inboxView(u)],['pricing','💰','المناطق والتسعير',()=>pricingView(u)],['jobs','🧾','صفحة التوظيف والتسعير',()=>jobsAdminView(u)]]
     :role==='rep'?[['today','📝','تسجيل اليوم',()=>repView(u)],['suggest','💡','اقتراحات وترشيح',()=>suggestView(u)],['acct','🗂️','حسابي وسجلاتي',()=>accountView(u.uid,u.displayName||u.email,()=>repView(u))]]:[];
   items.forEach(i=>{const b=el('button','nav');b.dataset.k=i[0];b.appendChild(el('span','',i[1]));b.appendChild(el('span','',i[2]));b.onclick=()=>{closeSide();i[3]()};side.appendChild(b)});
   const lo=el('button','nav');lo.style.marginTop='auto';lo.appendChild(el('span','','🚪'));lo.appendChild(el('span','','تسجيل الخروج'));lo.onclick=()=>signOut(auth);side.appendChild(lo);
@@ -660,13 +660,13 @@ function offDays(v){const set=new Set();
     if(WD[t]!==undefined)set.add(WD[t])});
   return set}
 
-async function readSheets(file){
+async function readSheets(file,raw){
   const out=[];
   if(/\.csv$/i.test(file.name))out.push({name:'CSV',start:0,arr:parseCsv(new TextDecoder('utf-8').decode(await file.arrayBuffer()))});
   else{
     try{await loadXlsx()}catch(e){throw new Error('مقدرتش أحمّل مكتبة Excel. نزّل التاب كـ CSV وارفعه.')}
-    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
-    wb.SheetNames.forEach(n=>{const ws=wb.Sheets[n];if(!ws||!ws['!ref'])return;out.push({name:n,start:XLSX.utils.decode_range(ws['!ref']).s.r,arr:XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''})})})}
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:!!raw});
+    wb.SheetNames.forEach(n=>{const ws=wb.Sheets[n];if(!ws||!ws['!ref'])return;out.push({name:n,start:XLSX.utils.decode_range(ws['!ref']).s.r,arr:XLSX.utils.sheet_to_json(ws,{header:1,raw:!!raw,defval:''})})})}
   return out.map(x=>({name:x.name,start:x.start,arr:x.arr,h:x.arr.findIndex(r=>r.some(c=>{const n=norm(c);return n==='tid'||n.includes('transporter')}))})).filter(x=>x.h>=0)}
 
 function compareView(u){
@@ -959,6 +959,101 @@ function pricingView(u){
       try{await setDoc(doc(db,'settings','pricing'),{zones:zs,idleSedan:num(P.idleSedan),idleVan:num(P.idleVan),daySedan:num(P.daySedan),dayVan:num(P.dayVan),updatedAt:Date.now()});P.zones=zs;msg.className='msg ok';msg.textContent='اتحفظ ✓';draw()}catch(e){msg.className='msg err';msg.textContent='ما اتحفظش ('+(e.code||'')+')'}};
     box.appendChild(sv);box.appendChild(msg);
   }
+}
+
+/* ---------- مقارنة شيت المرتبات ---------- */
+const ALLC=['A','B','A+B','C','1'];
+function guessMap(kind,val){const v=String(val).toLowerCase();if(kind==='route'){if(/single/.test(v))return ['A','B','C','1'];if(/double|dual|two|multi|2/.test(v))return ['A+B']}return []}
+function payrollView(u){
+  clear();setActive('payroll');header('مقارنة شيت المرتبات','قارن أيام وسيكلات كل مندوب في شيت المرتبات بالمسجل في السيستم (بالـ TID)');
+  const info=el('div','card');
+  info.appendChild(el('p','note','ارفع شيت المرتبات (Excel أو CSV). بيتقرأ في متصفحك بس ومش بيتخزن في السيستم. بيتطابق كل مندوب بالـ TID، وأي اختلاف في الأيام أو السيكل بيتعلّم ⚠️ عشان تراجعه بنفسك. الأيدل في السيستم بيتحسب يوم مسجل.'));
+  const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv';info.appendChild(fi);const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
+  const cfg=el('div'),out=el('div');app.appendChild(cfg);app.appendChild(out);
+  let tabs=[],tab=null,MAP={route:{},cyc:{}},sD,sT,sR,sC,sS,sP,sV,mapBox;
+  try{MAP=Object.assign(MAP,JSON.parse(localStorage.getItem('payMap')||'{}'))}catch(e){}
+  const saveMap=()=>{try{localStorage.setItem('payMap',JSON.stringify(MAP))}catch(e){}};
+  fi.onchange=async()=>{const file=fi.files[0];if(!file)return;msg.textContent='جاري قراءة الملف…';cfg.textContent='';out.textContent='';
+    try{tabs=await readSheets(file,true)}catch(e){msg.textContent=e.message||'مقدرتش أقرأ الملف';return}
+    if(!tabs.length){msg.textContent='مش لاقي تاب فيه عمود Transporter ID.';return}
+    tab=tabs[0];msg.textContent='اتقرأ الملف ('+tabs.length+' تاب فيه TID).';showCfg()};
+  function showCfg(){
+    cfg.textContent='';const c=el('div','card');c.appendChild(el('h2','','حدد الأعمدة'));
+    if(tabs.length>1){const ts=document.createElement('select');ts.style.cssText=SELCSS;tabs.forEach((x,i)=>{const o=document.createElement('option');o.value=i;o.textContent=x.name;ts.appendChild(o)});ts.onchange=()=>{tab=tabs[+ts.value];showCfg()};c.appendChild(ts)}
+    const hs=tab.arr[tab.h].map(x=>String(x).trim()||'عمود');
+    const find=keys=>hs.findIndex(h=>keys.some(k=>norm(h).includes(k)));
+    function mk(label,def){const w=el('div');w.appendChild(el('div','sub',label));const x=document.createElement('select');x.style.cssText=SELCSS;
+      const o0=document.createElement('option');o0.value='-1';o0.textContent='— بدون —';x.appendChild(o0);hs.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h;x.appendChild(o)});x.value=String(def);w.appendChild(x);c.appendChild(w);return x}
+    sD=mk('عمود التاريخ',find(['date','تاريخ']));sT=mk('عمود الـ TID (Transporter ID)',find(['transporter','tid']));
+    sR=mk('عمود نوع الـ Route (Route Type)',find(['route']));sC=mk('عمود اسم السيكل (Cycle Name)',find(['cycle']));
+    sS=mk('عمود المحطة',find(['station','محطه']));sP=mk('عمود Dispatched',find(['dispatch']));sV=mk('عمود Delivered',find(['deliver']));
+    cfg.appendChild(c);mapBox=el('div','card');cfg.appendChild(mapBox);buildMap();sR.onchange=sC.onchange=buildMap;
+    const go=el('button','pri','قارن');go.style.cssText+='width:100%;padding:12px;margin-bottom:12px';go.onclick=run;cfg.appendChild(go)}
+  function buildMap(){
+    mapBox.textContent='';mapBox.appendChild(el('h2','','ربط قيم الشيت بسيكلات السيستم'));
+    mapBox.appendChild(el('div','note','لكل قيمة في الشيت علّم السيكلات اللي تقابلها. القيمة اللي من غير علامات بتتتجاهل في المقارنة. ولو في نفس اليوم أكتر من صف لنفس المندوب بيتعتبر A+B. الاختيار بيتحفظ في المتصفح.'));
+    let any=false;
+    [['route',+sR.value,'نوع الـ Route'],['cyc',+sC.value,'اسم السيكل']].forEach(d=>{if(d[1]<0)return;
+      const vals=Array.from(new Set(tab.arr.slice(tab.h+1).map(r=>String(r[d[1]]==null?'':r[d[1]]).trim()).filter(Boolean))).slice(0,30);
+      if(!vals.length)return;any=true;const h=el('div','sub',d[2]+':');h.style.marginTop='10px';mapBox.appendChild(h);
+      vals.forEach(v=>{MAP[d[0]]=MAP[d[0]]||{};if(MAP[d[0]][v]===undefined)MAP[d[0]][v]=guessMap(d[0],v);
+        const w=el('div','wrow');w.appendChild(el('b','',v));w.appendChild(el('span','sp'));
+        ALLC.forEach(cy=>{const lb=document.createElement('label');lb.style.cssText='display:flex;align-items:center;gap:4px;margin-inline-start:8px';const cb=document.createElement('input');cb.type='checkbox';cb.style.cssText='width:auto;margin:0';cb.checked=MAP[d[0]][v].includes(cy);
+          cb.onchange=()=>{const a=MAP[d[0]][v].filter(x=>x!==cy);if(cb.checked)a.push(cy);MAP[d[0]][v]=a;saveMap()};lb.appendChild(cb);lb.appendChild(document.createTextNode(cy));w.appendChild(lb)});
+        mapBox.appendChild(w)})});
+    if(!any)mapBox.appendChild(el('div','note','اختار عمود Route Type أو Cycle Name لو عايز مقارنة السيكل.'));saveMap()}
+  function allowed(x){if(x.length>=2)return ['A+B'];let set=null;
+    [['route',x[0].route],['cyc',x[0].cyc]].forEach(q=>{const m=(MAP[q[0]]||{})[q[1]];if(m&&m.length)set=set?set.filter(c=>m.includes(c)):m.slice()});return set}
+  async function run(){
+    const di=+sD.value,ti=+sT.value,ri=+sR.value,ci=+sC.value,si=+sS.value,pi=+sP.value,vi=+sV.value;
+    if(di<0||ti<0){out.textContent='اختار عمود التاريخ وعمود الـ TID.';return}
+    out.textContent='جاري المقارنة…';const S={};let bad=0,minD='9999',maxD='0000';const cell=(r,i)=>i>=0&&r[i]!=null?String(r[i]).trim():'';
+    tab.arr.slice(tab.h+1).forEach(r=>{const tid=cell(r,ti).toUpperCase();if(!tid)return;const d=toDate(r[di]);if(!d){bad++;return}
+      const g=S[tid]||(S[tid]={tid:tid,days:{},station:'',disp:0,del:0});const dp=pi>=0?(parseFloat(r[pi])||0):0,dv=vi>=0?(parseFloat(r[vi])||0):0;
+      (g.days[d]||(g.days[d]=[])).push({route:cell(r,ri),cyc:cell(r,ci),disp:dp});if(si>=0&&!g.station)g.station=cell(r,si).toUpperCase();
+      g.disp+=dp;g.del+=dv;if(d<minD)minD=d;if(d>maxD)maxD=d});
+    if(!Object.keys(S).length){out.textContent='مفيش صفوف صالحة (راجع عمود التاريخ والـ TID).';return}
+    let data;try{data=await loadPeriod(minD,maxD)}catch(e){out.textContent='مقدرتش أقرأ بيانات السيستم: '+(e.code||'');return}
+    const byT={},noTid=[];Object.keys(data.users).forEach(id=>{const v=data.users[id];if(v.active===false)return;if(v.tid)byT[String(v.tid).trim().toUpperCase()]=id;else noTid.push(id)});
+    const dates=daysBetween(minD,maxD),R=[],issues=[],unm=[];
+    const sysCount=uid=>{let w=0,i=0;dates.forEach(d=>{const k=catOf(data.recs[uid+'_'+d]);if(k==='present')w++;else if(k==='idle')i++});return [w,i]};
+    Object.keys(S).forEach(tid=>{const g=S[tid],uid=byT[tid],us=uid&&data.users[uid];
+      const rep={tid:tid,name:us?(us.name||us.email):'—',st:us?stOf(us):'—',sheetSt:g.station,days:Object.keys(g.days).length,sw:0,si:0,disp:g.disp,del:g.del,n:0};
+      const add=(d,t)=>{issues.push([d,rep.name,tid,t]);rep.n++};
+      if(!us){unm.push(tid);add('—','مش مسجل في السيستم (الـ TID مش موجود)');R.push(rep);return}
+      const sc=sysCount(uid);rep.sw=sc[0];rep.si=sc[1];
+      if(g.station&&rep.st!=='غير محدد'&&g.station!==rep.st)add('—','المحطة: الشيت '+g.station+' / السيستم '+rep.st);
+      Object.keys(g.days).sort().forEach(d=>{const x=g.days[d],rc=data.recs[uid+'_'+d],k=catOf(rc),dsp=x.reduce((a,y)=>a+y.disp,0);
+        if(k==='none')add(d,'في الشيت وماسجلش في السيستم');
+        else if(k==='absent'||k==='off')add(d,'في الشيت، والسيستم '+(k==='absent'?'غياب':'إجازة'));
+        else if(k==='idle'){if(pi<0||dsp>0)add(d,'في الشيت'+(pi>=0?' ('+dsp+' شحنة)':'')+'، والسيستم أيدل')}
+        else{if(pi>=0&&dsp===0)add(d,'في السيستم شغل، والشيت Dispatched = 0');
+          if(!rc.cycle)add(d,'مسجل حضور من غير سيكل');
+          else{const al=allowed(x);if(al&&!al.includes(rc.cycle))add(d,'السيكل في السيستم ('+rc.cycle+') والشيت: '+(x.length>=2?'أكتر من Route في اليوم':[x[0].route,x[0].cyc].filter(Boolean).join(' / '))+' (يقابل: '+al.join(' أو ')+')')}}});
+      dates.forEach(d=>{if(!g.days[d]&&catOf(data.recs[uid+'_'+d])==='present')add(d,'مسجل شغل في السيستم ومش في الشيت')});
+      R.push(rep)});
+    Object.keys(byT).forEach(tid=>{if(S[tid])return;const uid=byT[tid],us=data.users[uid],ds=dates.filter(d=>catOf(data.recs[uid+'_'+d])==='present');
+      if(!ds.length)return;const sc=sysCount(uid),rep={tid:tid,name:us.name||us.email,st:stOf(us),sheetSt:'',days:0,sw:sc[0],si:sc[1],disp:0,del:0,n:0};
+      ds.forEach(d=>{issues.push([d,rep.name,tid,'مسجل شغل في السيستم ومالوش صفوف في الشيت']);rep.n++});R.push(rep)});
+    const noTidWork=noTid.filter(id=>dates.some(d=>catOf(data.recs[id+'_'+d])==='present'));
+    out.textContent='';
+    const warns=[];if(bad)warns.push(bad+' صف تاريخه مش مفهوم واتتجاهل.');
+    if(unm.length)warns.push(unm.length+' TID في الشيت مش لاقيه في السيستم: '+unm.slice(0,10).join('، ')+(unm.length>10?' …':''));
+    if(noTidWork.length)warns.push(noTidWork.length+' مندوب اشتغلوا في السيستم من غير TID، فمش بيتطابقوا مع الشيت (ضيف الـ TID من صفحة المناديب).');
+    if(!Object.keys(MAP.route||{}).length&&!Object.keys(MAP.cyc||{}).length)warns.push('مفيش ربط للسيكلات، فمقارنة السيكل مش بتتم.');
+    if(warns.length){const w=el('div','card');w.style.borderColor='var(--warn)';warns.forEach(t=>w.appendChild(el('div','msg',t)));out.appendChild(w)}
+    const okN=R.filter(x=>!x.n).length,sheetDays=R.reduce((a,x)=>a+x.days,0);
+    out.appendChild(el('div','band','فترة الشيت: '+minD+' إلى '+maxD));
+    const st=el('div','stats');[['مناديب',R.length],['مطابق',okN],['للمراجعة',R.length-okN],['أيام في الشيت',sheetDays],['عدد الملاحظات',issues.length]].forEach(x=>st.appendChild(statCard(x[0],x[1])));out.appendChild(st);
+    const only=document.createElement('label');only.style.cssText='display:flex;align-items:center;gap:8px;margin:6px 0 10px';const cb=document.createElement('input');cb.type='checkbox';cb.checked=true;cb.style.cssText='width:auto;margin:0';only.appendChild(cb);only.appendChild(document.createTextNode('اعرض اللي محتاج مراجعة بس'));out.appendChild(only);
+    const tbox=el('div');out.appendChild(tbox);
+    const H=['الحالة','المندوب','TID','المحطة (سيستم / شيت)','أيام الشيت','شغل (سيستم)','أيدل (سيستم)','Dispatched','Delivered','DSR','ملاحظات'];
+    const tr=x=>[x.n?'⚠️ راجع':'✅ مطابق',x.name,x.tid,x.st+' / '+(x.sheetSt||'—'),x.days,x.sw,x.si,x.disp,x.del,x.disp?pct(x.del,x.disp)+'%':'—',x.n];
+    function drawT(){tbox.textContent='';const L=R.filter(x=>!cb.checked||x.n).sort((a,b)=>b.n-a.n);tableCard(tbox,'ملخص المناديب ('+L.length+')',H,L.map(tr))}
+    cb.onchange=drawT;drawT();
+    issues.sort((a,b)=>(a[1]>b[1]?1:a[1]<b[1]?-1:(a[0]>b[0]?1:-1)));
+    tableCard(out,'تفاصيل الملاحظات ('+issues.length+')',['التاريخ','المندوب','TID','الملاحظة'],issues);
+    const ex=el('button','','تصدير الملاحظات Excel (CSV)');ex.style.width='100%';ex.onclick=()=>csvSave('مراجعة-المرتبات-'+minD+'_'+maxD+'.csv',[['التاريخ','المندوب','TID','الملاحظة']].concat(issues));out.appendChild(ex)}
 }
 
 /* ---------- الإيميل ما اتفعلش (للمشرف) ---------- */
