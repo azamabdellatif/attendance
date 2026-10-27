@@ -148,7 +148,7 @@ function setShell(u,role){
   shell.className='shell';
   const side=document.getElementById('side'),tb=document.getElementById('topbar');side.textContent='';tb.textContent='';
   const br=el('div','brand');br.appendChild(el('div','logo','📋'));br.appendChild(el('span','','متابعة المناديب'));side.appendChild(br);
-  const items=role==='admin'?[['dash','🏠','لوحة التحكم',()=>adminView(u)],['reps','👥','المناديب والبحث',()=>repsView(u)],['report','📊','تقرير فترة',()=>reportView(u)],['export','📤','سحب الحضور وحالة بكرا',()=>exportView(u)],['cmp','📁','مقارنة بملف Excel',()=>compareView(u)],['payroll','💳','مقارنة شيت المرتبات',()=>payrollView(u)],['inbox','💡','الاقتراحات والترشيحات',()=>inboxView(u)],['pricing','💰','المناطق والتسعير',()=>pricingView(u)],['jobs','🧾','صفحة التوظيف والتسعير',()=>jobsAdminView(u)]]
+  const items=role==='admin'?[['dash','🏠','لوحة التحكم',()=>adminView(u)],['reps','👥','المناديب والبحث',()=>repsView(u)],['report','📊','تقرير فترة',()=>reportView(u)],['export','📤','سحب الحضور وحالة بكرا',()=>exportView(u)],['cmp','📁','مقارنة بملف Excel',()=>compareView(u)],['payroll','💳','مقارنة شيت المرتبات',()=>payrollView(u)],['score','📈','السكور كارد',()=>scoreView(u)],['inbox','💡','الاقتراحات والترشيحات',()=>inboxView(u)],['pricing','💰','المناطق والتسعير',()=>pricingView(u)],['jobs','🧾','صفحة التوظيف والتسعير',()=>jobsAdminView(u)]]
     :role==='rep'?[['today','📝','تسجيل اليوم',()=>repView(u)],['suggest','💡','اقتراحات وترشيح',()=>suggestView(u)],['acct','🗂️','حسابي وسجلاتي',()=>accountView(u.uid,u.displayName||u.email,()=>repView(u))]]:[];
   items.forEach(i=>{const b=el('button','nav');b.dataset.k=i[0];b.appendChild(el('span','',i[1]));b.appendChild(el('span','',i[2]));b.onclick=()=>{closeSide();i[3]()};side.appendChild(b)});
   const lo=el('button','nav');lo.style.marginTop='auto';lo.appendChild(el('span','','🚪'));lo.appendChild(el('span','','تسجيل الخروج'));lo.onclick=()=>signOut(auth);side.appendChild(lo);
@@ -172,7 +172,7 @@ const today=iso(new Date());
 function clear(){unsubs.forEach(f=>f());unsubs=[];app.textContent=''}
 function header(title,sub){const t=el('div','pagehead'),l=el('div');t.appendChild(el('div','pico','📋'));l.appendChild(el('h1','',title));l.appendChild(el('div','sub',sub));t.appendChild(l);app.appendChild(t)}
 function iconFor(lbl){
-  const M=[['إجمالي','👥','var(--pri)'],['أجر','💵','var(--ok)'],['المجموع','🧮','var(--pri)'],['منتور','🛡️','var(--info)'],['مناديب','👥','var(--pri)'],['مطابق','✔️','var(--ok)'],['زيادة','➕','var(--info)'],['ناقص','⚠️','var(--bad)'],['غياب','❌','var(--bad)'],['غايب','❌','var(--bad)'],['أيدل','⏸️','var(--warn)'],['إجازة','🏖️','var(--info)'],['إجازات','🏖️','var(--info)'],['سلف','💰','var(--warn)'],['أنهى','🏁','var(--ok)'],['أنهوا','🏁','var(--ok)'],['حضور','✅','var(--ok)'],['حضروا','✅','var(--ok)'],['حضر','✅','var(--ok)']];
+  const M=[['إجمالي','👥','var(--pri)'],['أجر','💵','var(--ok)'],['المجموع','🧮','var(--pri)'],['منتور','🛡️','var(--info)'],['شكاوى','📣','var(--bad)'],['DCR','📦','var(--ok)'],['الالتزام','🧭','var(--info)'],['مناديب','👥','var(--pri)'],['مطابق','✔️','var(--ok)'],['زيادة','➕','var(--info)'],['ناقص','⚠️','var(--bad)'],['غياب','❌','var(--bad)'],['غايب','❌','var(--bad)'],['أيدل','⏸️','var(--warn)'],['إجازة','🏖️','var(--info)'],['إجازات','🏖️','var(--info)'],['سلف','💰','var(--warn)'],['أنهى','🏁','var(--ok)'],['أنهوا','🏁','var(--ok)'],['حضور','✅','var(--ok)'],['حضروا','✅','var(--ok)'],['حضر','✅','var(--ok)']];
   return M.find(x=>lbl.includes(x[0]))||['','📊','var(--pri)']}
 function statCard(lbl,val){
   const m=iconFor(lbl),c=el('div','stat'),i=el('div','sinfo'),b=el('b','',val);b.style.color=m[2];if(String(val).indexOf('ج')>=0){b.style.fontSize='21px';b.style.whiteSpace='nowrap'}i.appendChild(b);i.appendChild(el('span','',lbl));
@@ -1054,6 +1054,90 @@ function payrollView(u){
     issues.sort((a,b)=>(a[1]>b[1]?1:a[1]<b[1]?-1:(a[0]>b[0]?1:-1)));
     tableCard(out,'تفاصيل الملاحظات ('+issues.length+')',['التاريخ','المندوب','TID','الملاحظة'],issues);
     const ex=el('button','','تصدير الملاحظات Excel (CSV)');ex.style.width='100%';ex.onclick=()=>csvSave('مراجعة-المرتبات-'+minD+'_'+maxD+'.csv',[['التاريخ','المندوب','TID','الملاحظة']].concat(issues));out.appendChild(ex)}
+}
+
+/* ---------- السكور كارد ---------- */
+const SC_DEF={
+  low:'صباح الخير {name}\nنسبة التسليمات (DCR) بتاعتك {dcr}% وهي أقل من المطلوب ({target}%).\nمحتاجين نحسّن النسبة دي، ولو بتقابلك أي مشاكل في التسليم (عنوان، عميل مابيردش، أو غيره) عرّفنا عشان نساعدك.',
+  dnr:'صباح الخير {name}\nتم تسجيل ({dnr}) شكوى عدم استلام على حسابك.\nيرجى عدم تسليم الشحنات إلا للعميل، وفي حالة عدم التواصل معه يرجى الرجوع للمحطة.\nولا يُسمح بترك الشحنة أمام الباب أو تركها مع الحارس بدون إذن العميل.'};
+function numP(v){if(typeof v==='number')return isNaN(v)?null:v;const t=String(v==null?'':v).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[%,\s]/g,'');if(t===''||t==='-')return null;const n=parseFloat(t);return isNaN(n)?null:n}
+function scoreView(u){
+  clear();setActive('score');header('السكور كارد','حلّل نسبة التسليمات (DCR) والشكاوى (DNR) والتزام ترتيب العملاء، وابعت تنبيهات واتساب للمحتاجين');
+  const info=el('div','card');
+  info.appendChild(el('p','note','ارفع شيت السكور كارد (Excel أو CSV). بيتقرأ في متصفحك بس ومش بيتخزن. السكور كارد فيه الـ TID بس، والسيستم هو اللي بيطابق الـ TID بالمندوب (الاسم والرقم) عشان تبعتله واتساب.'));
+  const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv';info.appendChild(fi);const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
+  const cfg=el('div'),out=el('div');app.appendChild(cfg);app.appendChild(out);
+  let tabs=[],tab=null,sT,sD,sN,sQ,sS,gT,gQ,gN,tLow,tDnr,TPL=Object.assign({},SC_DEF);
+  try{TPL=Object.assign(TPL,JSON.parse(localStorage.getItem('scTpl')||'{}'))}catch(e){}
+  fi.onchange=async()=>{const file=fi.files[0];if(!file)return;msg.textContent='جاري قراءة الملف…';cfg.textContent='';out.textContent='';
+    try{tabs=await readSheets(file,true)}catch(e){msg.textContent=e.message||'مقدرتش أقرأ الملف';return}
+    if(!tabs.length){msg.textContent='مش لاقي تاب فيه عمود Transporter ID.';return}
+    tab=tabs[0];msg.textContent='اتقرأ الملف ('+tabs.length+' تاب فيه TID).';showCfg()};
+  function showCfg(){
+    cfg.textContent='';const c=el('div','card');c.appendChild(el('h2','','حدد الأعمدة والأهداف'));
+    if(tabs.length>1){const ts=document.createElement('select');ts.style.cssText=SELCSS;tabs.forEach((x,i)=>{const o=document.createElement('option');o.value=i;o.textContent=x.name;ts.appendChild(o)});ts.onchange=()=>{tab=tabs[+ts.value];showCfg()};c.appendChild(ts)}
+    const hs=tab.arr[tab.h].map(x=>String(x).trim()||'عمود'),find=keys=>hs.findIndex(h=>keys.some(k=>norm(h).includes(k)));
+    function mk(label,def){const w=el('div');w.appendChild(el('div','sub',label));const x=document.createElement('select');x.style.cssText=SELCSS;
+      const o0=document.createElement('option');o0.value='-1';o0.textContent='— بدون —';x.appendChild(o0);hs.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h;x.appendChild(o)});x.value=String(def);w.appendChild(x);c.appendChild(w);return x}
+    sT=mk('عمود الـ TID',find(['transporter','tid']));sD=mk('عمود نسبة التسليمات (DCR)',find(['dcr','delivery completion','completion']));
+    sN=mk('عمود الشكاوى (DNR)',find(['dnr','not received']));sQ=mk('عمود الالتزام بترتيب العملاء (Sequence)',find(['seq','sequence','ترتيب']));sS=mk('عمود المحطة (لو موجود)',find(['station','محطه']));
+    const gr=el('div','jrow');gr.style.marginTop='6px';
+    function num(label,v){const w=el('div');w.appendChild(el('div','note',label));const i=el('input');i.type='number';i.value=v;i.style.marginTop='4px';w.appendChild(i);gr.appendChild(w);return i}
+    gT=num('هدف DCR (%)',90);gQ=num('هدف الترتيب (%)',90);gN=num('تنبيه DNR لو أكبر من',0);c.appendChild(gr);cfg.appendChild(c);
+    const tc=el('div','card');tc.appendChild(el('h2','','نص رسائل الواتساب'));tc.appendChild(el('div','note','تقدر تعدّل. المتغيرات: {name} {tid} {dcr} {dnr} {target}'));
+    [['low','رسالة DCR أقل من الهدف'],['dnr','رسالة الشكاوى (DNR)']].forEach(f=>{const l=el('div','sub',f[1]);l.style.margin='8px 0 4px';tc.appendChild(l);const t=document.createElement('textarea');t.rows=4;t.style.cssText=SELCSS+';resize:vertical';t.value=TPL[f[0]];t.oninput=()=>{TPL[f[0]]=t.value;try{localStorage.setItem('scTpl',JSON.stringify(TPL))}catch(e){}};tc.appendChild(t)});
+    cfg.appendChild(tc);const go=el('button','pri','حلّل');go.style.cssText+='width:100%;padding:12px;margin-bottom:12px';go.onclick=run;cfg.appendChild(go)}
+  async function run(){
+    const ti=+sT.value,di=+sD.value,ni=+sN.value,qi=+sQ.value,si=+sS.value,TD=parseFloat(gT.value)||90,TQ=parseFloat(gQ.value)||90,TN=parseFloat(gN.value)||0;
+    if(ti<0||(di<0&&ni<0)){out.textContent='اختار عمود الـ TID وعمود DCR أو DNR على الأقل.';return}
+    out.textContent='جاري التحليل…';const seen=new Set(),L=[];let dup=0;
+    tab.arr.slice(tab.h+1).forEach(r=>{const tid=String(r[ti]==null?'':r[ti]).trim().toUpperCase();if(!tid)return;if(seen.has(tid)){dup++;return}seen.add(tid);
+      L.push({tid:tid,dcr:di>=0?numP(r[di]):null,dnr:ni>=0?numP(r[ni]):null,seq:qi>=0?numP(r[qi]):null,st:si>=0?String(r[si]==null?'':r[si]).trim().toUpperCase():''})});
+    if(!L.length){out.textContent='مفيش صفوف صالحة.';return}
+    const scale=k=>{const v=L.map(x=>x[k]).filter(x=>x!=null);return v.length&&Math.max.apply(null,v)<=1.0001?100:1};
+    ['dcr','seq'].forEach(k=>{const m=scale(k);if(m!==1)L.forEach(x=>{if(x[k]!=null)x[k]=x[k]*m})});
+    let users={};try{const sn=await getDocs(collection(db,'users'));sn.docs.forEach(d=>{const v=d.data();if(v.tid)users[String(v.tid).trim().toUpperCase()]=v})}catch(e){}
+    L.forEach(x=>{const us=users[x.tid];x.name=us?(us.name||us.email):'';x.phone=us?us.phone:'';x.sys=us?stOf(us):'';x.st=x.st||(x.sys&&x.sys!=='غير محدد'?x.sys:'غير محدد')});
+    const avg=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((p,c)=>p+c,0)/v.length:null},r1=x=>x==null?0:Math.round(x*10)/10;
+    const withD=L.filter(x=>x.dcr!=null),lowD=withD.filter(x=>x.dcr<TD),dnrL=L.filter(x=>x.dnr!=null&&x.dnr>TN),unm=L.filter(x=>!x.name);
+    const band=x=>x.dcr==null?'n':x.dcr>=TD?'ok':x.dcr>=TD-5?'warn':'bad';
+    out.textContent='';
+    if(unm.length||dup){const w=el('div','card');w.style.borderColor='var(--warn)';
+      if(unm.length)w.appendChild(el('div','msg',unm.length+' TID مش مسجلين في السيستم، فمش هيتبعتلهم واتساب (بيظهروا في التحليل بس).'));
+      if(dup)w.appendChild(el('div','msg',dup+' صف مكرر لنفس الـ TID واتتجاهل.'));out.appendChild(w)}
+    const st=el('div','stats');
+    [['مناديب في السكور كارد',L.length],['متوسط DCR',withD.length?r1(avg(withD.map(x=>x.dcr)))+'%':'—'],['تحت هدف DCR',lowD.length],['مناديب عندهم شكاوى DNR',dnrL.length],['مجموع الشكاوى (DNR)',r1(L.reduce((a,x)=>a+(x.dnr||0),0))],['متوسط الالتزام بالترتيب',L.some(x=>x.seq!=null)?r1(avg(L.map(x=>x.seq)))+'%':'—']].forEach(x=>st.appendChild(statCard(x[0],x[1])));out.appendChild(st);
+    const nOk=withD.filter(x=>band(x)==='ok').length,nW=withD.filter(x=>band(x)==='warn').length,nB=withD.filter(x=>band(x)==='bad').length;
+    if(withD.length)breakdown(out,'تقييم المكتب: نسبة التسليمات (DCR)',[['حققوا الهدف (≥ '+TD+'%)',nOk,'var(--ok)'],['أقل بحد أقصى 5 نقط',nW,'var(--warn)'],['أقل بكتير',nB,'var(--bad)']],pct(nOk,withD.length),'حققوا الهدف',
+      [['متوسط DCR للمكتب',r1(avg(withD.map(x=>x.dcr))),'var(--ok)'],['متوسط الالتزام بترتيب العملاء',L.some(x=>x.seq!=null)?r1(avg(L.map(x=>x.seq))):0,'var(--info)'],['نسبة المناديب تحت الهدف',pct(lowD.length,withD.length),'var(--bad)'],['نسبة المناديب اللي عندهم DNR',pct(dnrL.length,L.length),'var(--warn)']]);
+    if(withD.length){const hc=el('div','card');hc.appendChild(el('h2','','توزيع المناديب حسب DCR'));const bins=[[0,80,'<80'],[80,85,'80-85'],[85,90,'85-90'],[90,95,'90-95'],[95,101,'95-100']];
+      const cnt=bins.map(b=>withD.filter(x=>x.dcr>=b[0]&&x.dcr<b[1]).length),mx=Math.max.apply(null,cnt)||1,row=el('div');row.style.cssText='display:flex;gap:10px;align-items:flex-end;height:170px;direction:ltr';
+      bins.forEach((b,i)=>{const col=el('div');col.style.cssText='flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%';
+        col.appendChild(el('b','',cnt[i]));const bar=el('div');bar.style.cssText='width:100%;border-radius:8px 8px 0 0;min-height:3px;height:'+Math.round(cnt[i]/mx*110)+'px;background:'+(b[1]<=TD-5?'var(--bad)':b[1]<=TD?'var(--warn)':'var(--ok)');col.appendChild(bar);col.appendChild(el('span','note',b[2]));row.appendChild(col)});
+      hc.appendChild(row);out.appendChild(hc)}
+    const sts={};L.forEach(x=>{(sts[x.st]||(sts[x.st]=[])).push(x)});const sk=Object.keys(sts).sort();
+    if(sk.length>1||(sk.length===1&&sk[0]!=='غير محدد')){const sc=el('div','card');sc.appendChild(el('h2','','مقارنة المحطات'));const g=el('div','stg');
+      sk.forEach(k=>{const a=sts[k],c=el('div','stc'),dd=a.filter(x=>x.dcr!=null);c.appendChild(el('b','',k));c.appendChild(el('div','sub',a.length+' مندوب · شكاوى عند '+a.filter(x=>x.dnr>TN).length));
+        c.appendChild(barEl('متوسط DCR',r1(avg(dd.map(x=>x.dcr))),'var(--ok)'));c.appendChild(barEl('متوسط الالتزام بالترتيب',r1(avg(a.map(x=>x.seq))),'var(--info)'));c.appendChild(barEl('تحت الهدف',pct(dd.filter(x=>x.dcr<TD).length,dd.length),'var(--bad)'));g.appendChild(c)});sc.appendChild(g);out.appendChild(sc)}
+    const wk=withD.slice().sort((a,b)=>a.dcr-b.dcr).slice(0,10);
+    if(wk.length){const rc=el('div','card');rc.appendChild(el('h2','','أقل 10 مناديب في DCR'));wk.forEach(x=>{const w=el('div','bar'),hd=el('div','barh');hd.appendChild(el('span','',x.tid+(x.name?' — '+x.name:'')));hd.appendChild(el('b','',r1(x.dcr)+'%'));
+      const tr=el('div','track'),f=el('div','fill');f.style.width=Math.min(100,x.dcr)+'%';f.style.background='var(--'+band(x)+')';tr.appendChild(f);w.appendChild(hd);w.appendChild(tr);rc.appendChild(w)});out.appendChild(rc)}
+    const only=document.createElement('label');only.style.cssText='display:flex;align-items:center;gap:8px;margin:12px 0 8px';const cb=document.createElement('input');cb.type='checkbox';cb.style.cssText='width:auto;margin:0';only.appendChild(cb);only.appendChild(document.createTextNode('اعرض اللي محتاج رسالة بس'));out.appendChild(only);
+    const tbox=el('div');out.appendChild(tbox);
+    const fill=(t,x)=>t.replace(/\{name\}/g,x.name||'').replace(/\{tid\}/g,x.tid).replace(/\{dcr\}/g,r1(x.dcr)).replace(/\{dnr\}/g,x.dnr==null?'':x.dnr).replace(/\{target\}/g,TD);
+    function drawT(){tbox.textContent='';const rows=L.filter(x=>!cb.checked||(x.dcr!=null&&x.dcr<TD)||(x.dnr!=null&&x.dnr>TN)).sort((a,b)=>(a.dcr==null?999:a.dcr)-(b.dcr==null?999:b.dcr));
+      const c=el('div','card scroll'),t=el('table'),h=el('tr');['TID','المندوب (من السيستم)','المحطة','DCR','الترتيب','DNR','رسائل واتساب'].forEach(x=>h.appendChild(el('th','',x)));t.appendChild(h);
+      rows.forEach(x=>{const tr=el('tr');tr.appendChild(el('td','',x.tid));tr.appendChild(el('td','',x.name||'—'));tr.appendChild(el('td','',x.st));
+        tr.appendChild(el('td',band(x)==='n'?'':band(x)==='ok'?'ok':band(x)==='warn'?'warn':'bad',x.dcr==null?'—':r1(x.dcr)+'%'));
+        tr.appendChild(el('td',x.seq==null?'':x.seq>=TQ?'ok':'bad',x.seq==null?'—':r1(x.seq)+'%'));
+        tr.appendChild(el('td',x.dnr>TN?'bad':'',x.dnr==null?'—':x.dnr));
+        const ac=el('td');[[x.dcr!=null&&x.dcr<TD,'📲 DCR','low'],[x.dnr!=null&&x.dnr>TN,'📲 DNR','dnr']].forEach(a=>{if(!a[0])return;const url=waLink(x.phone,fill(TPL[a[2]],x));
+          const b=el('button','sm',url?a[1]:'بدون رقم');b.disabled=!url;b.style.marginInlineEnd='4px';b.onclick=()=>{window.open(url,'_blank');b.textContent='اتبعت ✓'};ac.appendChild(b)});
+        if(!ac.childNodes.length)ac.textContent='—';tr.appendChild(ac);t.appendChild(tr)});
+      if(!rows.length){const e=el('tr'),td=el('td','','مفيش حد.');td.colSpan=7;e.appendChild(td);t.appendChild(e)}
+      c.appendChild(t);const h2=el('h2','','المناديب ('+rows.length+')');h2.style.margin='14px 0 8px';tbox.appendChild(h2);tbox.appendChild(c)}
+    cb.onchange=drawT;drawT();
+    const ex=el('button','','تصدير Excel (CSV)');ex.style.width='100%';ex.onclick=()=>csvSave('سكور-كارد.csv',[['TID','المندوب','المحطة','DCR','الترتيب','DNR']].concat(L.map(x=>[x.tid,x.name,x.st,x.dcr==null?'':r1(x.dcr),x.seq==null?'':r1(x.seq),x.dnr==null?'':x.dnr])));out.appendChild(ex)}
 }
 
 /* ---------- الإيميل ما اتفعلش (للمشرف) ---------- */
