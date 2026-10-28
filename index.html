@@ -660,8 +660,41 @@ function offDays(v){const set=new Set();
     if(WD[t]!==undefined)set.add(WD[t])});
   return set}
 
+/* ---------- قراءة جداول الـ PDF ---------- */
+function loadPdfjs(){return new Promise((res,rej)=>{if(window.pdfjsLib)return res(window.pdfjsLib);
+  const base='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/',sc=document.createElement('script');sc.src=base+'pdf.min.js';
+  sc.onload=()=>{try{window.pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob(["importScripts('"+base+"pdf.worker.min.js')"],{type:'text/javascript'}));res(window.pdfjsLib)}catch(e){rej(e)}};
+  sc.onerror=()=>rej(new Error('lib'));document.head.appendChild(sc)})}
+async function pdfToTab(lib,buf){
+  const pdf=await lib.getDocument({data:buf}).promise,rows=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const tc=await (await pdf.getPage(p)).getTextContent(),lines=[];
+    const its=tc.items.filter(i=>i.str&&i.str.trim()!=='').map(i=>{const h=i.height||Math.abs(i.transform[3])||10,w=i.width>0?i.width:i.str.length*h*0.52;return {s:i.str,x:i.transform[4],y:i.transform[5],w:w,h:h}});
+    its.forEach(it=>{const L=lines.find(l=>Math.abs(l.y-it.y)<=Math.max(2,it.h*0.4));if(L)L.items.push(it);else lines.push({y:it.y,items:[it]})});
+    lines.sort((a,b)=>b.y-a.y).forEach(L=>{L.items.sort((a,b)=>a.x-b.x);const cells=[];
+      L.items.forEach(it=>{const c=cells[cells.length-1];if(c&&it.x-c.x1<=Math.max(3,it.h*0.45)){c.t+=(it.x-c.x1>1?' ':'')+it.s;c.x1=it.x+it.w}else cells.push({t:it.s,x0:it.x,x1:it.x+it.w})});
+      rows.push({p:p,y:L.y,cells:cells})})}
+  const isT=t=>{t=t.replace(/\s/g,'');return /^[A-Z0-9]{12,16}$/.test(t)&&/\d/.test(t)&&/[A-Z]/.test(t)},hasT=r=>r.cells.some(c=>isT(c.t));
+  const hi=rows.findIndex(r=>!hasT(r)&&/transporter|\btid\b/.test(norm(r.cells.map(c=>c.t).join(' '))));
+  if(hi<0)return null;
+  const H=rows[hi],cols=H.cells.map(c=>({x0:c.x0,x1:c.x1,t:c.t})),mid=c=>(c.x0+c.x1)/2;
+  const ov=(a,b)=>Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0)),near=c=>{let b=-1,bs=-1e9;cols.forEach((k,j)=>{const sc=ov(c,k)*10-Math.abs(mid(c)-mid(k));if(sc>bs){bs=sc;b=j}});return b};
+  rows.forEach((r,i)=>{if(i===hi||r.p!==H.p||Math.abs(r.y-H.y)>22||hasT(r))return;
+    r.cells.forEach(c=>{let b=-1,bo=0;cols.forEach((k,j)=>{const o=ov(c,k);if(o>bo){bo=o;b=j}});if(b>=0&&bo>=Math.min(c.x1-c.x0,cols[b].x1-cols[b].x0)*0.4)cols[b].t=r.y>H.y?(c.t+' '+cols[b].t):(cols[b].t+' '+c.t)})});
+  const arr=[cols.map(c=>c.t.replace(/\s+/g,' ').trim())];
+  rows.forEach(r=>{if(!hasT(r))return;const o=cols.map(()=>'');
+    if(r.cells.length===cols.length)r.cells.forEach((c,j)=>{o[j]=c.t});
+    else r.cells.forEach(c=>{const j=near(c);if(j>=0)o[j]=(o[j]?o[j]+' ':'')+c.t});arr.push(o)});
+  return {arr:arr}}
+function sampleOf(tab,i){const rows=tab.arr.slice(tab.h+1,tab.h+12);for(let k=0;k<rows.length;k++){const v=rows[k][i];if(v!==''&&v!=null)return ' (مثال: '+String(v).slice(0,16)+')'}return ''}
+
 async function readSheets(file,raw){
   const out=[];
+  if(/\.pdf$/i.test(file.name)){
+    let lib;try{lib=await loadPdfjs()}catch(e){throw new Error('مقدرتش أحمّل مكتبة قراءة الـ PDF. حوّل الجدول لـ Excel أو CSV وارفعه.')}
+    let t;try{t=await pdfToTab(lib,await file.arrayBuffer())}catch(e){throw new Error('مقدرتش أقرأ الـ PDF ده.')}
+    if(!t)throw new Error('مش لاقي جدول فيه Transporter ID في الـ PDF. لو الـ PDF صورة (سكان) مش هيتقرأ، حوّله لـ Excel أو CSV.');
+    return [{name:'PDF',start:0,arr:t.arr,h:0}]}
   if(/\.csv$/i.test(file.name))out.push({name:'CSV',start:0,arr:parseCsv(new TextDecoder('utf-8').decode(await file.arrayBuffer()))});
   else{
     try{await loadXlsx()}catch(e){throw new Error('مقدرتش أحمّل مكتبة Excel. نزّل التاب كـ CSV وارفعه.')}
@@ -967,8 +1000,8 @@ function guessMap(kind,val){const v=String(val).toLowerCase();if(kind==='route')
 function payrollView(u){
   clear();setActive('payroll');header('مقارنة شيت المرتبات','قارن أيام وسيكلات كل مندوب في شيت المرتبات بالمسجل في السيستم (بالـ TID)');
   const info=el('div','card');
-  info.appendChild(el('p','note','ارفع شيت المرتبات (Excel أو CSV). بيتقرأ في متصفحك بس ومش بيتخزن في السيستم. بيتطابق كل مندوب بالـ TID، وأي اختلاف في الأيام أو السيكل بيتعلّم ⚠️ عشان تراجعه بنفسك. الأيدل في السيستم بيتحسب يوم مسجل.'));
-  const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv';info.appendChild(fi);const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
+  info.appendChild(el('p','note','ارفع شيت المرتبات (Excel أو CSV أو PDF فيه جدول). بيتقرأ في متصفحك بس ومش بيتخزن في السيستم. بيتطابق كل مندوب بالـ TID، وأي اختلاف في الأيام أو السيكل بيتعلّم ⚠️ عشان تراجعه بنفسك. الأيدل في السيستم بيتحسب يوم مسجل.'));
+  const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv,.pdf';info.appendChild(fi);const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
   const cfg=el('div'),out=el('div');app.appendChild(cfg);app.appendChild(out);
   let tabs=[],tab=null,MAP={route:{},cyc:{}},sD,sT,sR,sC,sS,sP,sV,mapBox;
   try{MAP=Object.assign(MAP,JSON.parse(localStorage.getItem('payMap')||'{}'))}catch(e){}
@@ -983,7 +1016,7 @@ function payrollView(u){
     const hs=tab.arr[tab.h].map(x=>String(x).trim()||'عمود');
     const find=keys=>hs.findIndex(h=>keys.some(k=>norm(h).includes(k)));
     function mk(label,def){const w=el('div');w.appendChild(el('div','sub',label));const x=document.createElement('select');x.style.cssText=SELCSS;
-      const o0=document.createElement('option');o0.value='-1';o0.textContent='— بدون —';x.appendChild(o0);hs.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h;x.appendChild(o)});x.value=String(def);w.appendChild(x);c.appendChild(w);return x}
+      const o0=document.createElement('option');o0.value='-1';o0.textContent='— بدون —';x.appendChild(o0);hs.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h+sampleOf(tab,i);x.appendChild(o)});x.value=String(def);w.appendChild(x);c.appendChild(w);return x}
     sD=mk('عمود التاريخ',find(['date','تاريخ']));sT=mk('عمود الـ TID (Transporter ID)',find(['transporter','tid']));
     sR=mk('عمود نوع الـ Route (Route Type)',find(['route']));sC=mk('عمود اسم السيكل (Cycle Name)',find(['cycle']));
     sS=mk('عمود المحطة',find(['station','محطه']));sP=mk('عمود Dispatched',find(['dispatch']));sV=mk('عمود Delivered',find(['deliver']));
@@ -1064,8 +1097,8 @@ function numP(v){if(typeof v==='number')return isNaN(v)?null:v;const t=String(v=
 function scoreView(u){
   clear();setActive('score');header('السكور كارد','حلّل نسبة التسليمات (DCR) والشكاوى (DNR) والتزام ترتيب العملاء، وابعت تنبيهات واتساب للمحتاجين');
   const info=el('div','card');
-  info.appendChild(el('p','note','ارفع شيت السكور كارد (Excel أو CSV). بيتقرأ في متصفحك بس ومش بيتخزن. السكور كارد فيه الـ TID بس، والسيستم هو اللي بيطابق الـ TID بالمندوب (الاسم والرقم) عشان تبعتله واتساب.'));
-  const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv';info.appendChild(fi);const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
+  info.appendChild(el('p','note','ارفع شيت السكور كارد (Excel أو CSV أو PDF فيه جدول). بيتقرأ في متصفحك بس ومش بيتخزن. السكور كارد فيه الـ TID بس، والسيستم هو اللي بيطابق الـ TID بالمندوب (الاسم والرقم) عشان تبعتله واتساب.'));
+  const fi=el('input');fi.type='file';fi.accept='.xlsx,.xls,.csv,.pdf';info.appendChild(fi);const msg=el('div','msg');info.appendChild(msg);app.appendChild(info);
   const cfg=el('div'),out=el('div');app.appendChild(cfg);app.appendChild(out);
   let tabs=[],tab=null,sT,sD,sN,sQ,sS,gT,gQ,gN,tLow,tDnr,TPL=Object.assign({},SC_DEF);
   try{TPL=Object.assign(TPL,JSON.parse(localStorage.getItem('scTpl')||'{}'))}catch(e){}
@@ -1078,7 +1111,7 @@ function scoreView(u){
     if(tabs.length>1){const ts=document.createElement('select');ts.style.cssText=SELCSS;tabs.forEach((x,i)=>{const o=document.createElement('option');o.value=i;o.textContent=x.name;ts.appendChild(o)});ts.onchange=()=>{tab=tabs[+ts.value];showCfg()};c.appendChild(ts)}
     const hs=tab.arr[tab.h].map(x=>String(x).trim()||'عمود'),find=keys=>hs.findIndex(h=>keys.some(k=>norm(h).includes(k)));
     function mk(label,def){const w=el('div');w.appendChild(el('div','sub',label));const x=document.createElement('select');x.style.cssText=SELCSS;
-      const o0=document.createElement('option');o0.value='-1';o0.textContent='— بدون —';x.appendChild(o0);hs.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h;x.appendChild(o)});x.value=String(def);w.appendChild(x);c.appendChild(w);return x}
+      const o0=document.createElement('option');o0.value='-1';o0.textContent='— بدون —';x.appendChild(o0);hs.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h+sampleOf(tab,i);x.appendChild(o)});x.value=String(def);w.appendChild(x);c.appendChild(w);return x}
     sT=mk('عمود الـ TID',find(['transporter','tid']));sD=mk('عمود نسبة التسليمات (DCR)',find(['dcr','delivery completion','completion']));
     sN=mk('عمود الشكاوى (DNR)',find(['dnr','not received']));sQ=mk('عمود الالتزام بترتيب العملاء (Sequence)',find(['seq','sequence','ترتيب']));sS=mk('عمود المحطة (لو موجود)',find(['station','محطه']));
     const gr=el('div','jrow');gr.style.marginTop='6px';
